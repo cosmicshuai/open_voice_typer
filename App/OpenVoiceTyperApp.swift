@@ -7,6 +7,6 @@ struct OpenVoiceTyperApp: App {
         WindowGroup {
             RootView()
         }
-        .modelContainer(for: TranscriptRecord.self)
+        .modelContainer(SessionController.shared.modelContainer)
     }
 }

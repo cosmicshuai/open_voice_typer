@@ -2,27 +2,40 @@
 import Foundation
 
 /// Captures microphone audio via an `AVAudioEngine` tap, downsamples to
-/// 16 kHz mono 16-bit PCM, and finalizes to a WAV file. The tap callback runs
-/// on an audio thread, so sample state is lock-guarded.
+/// 16 kHz mono 16-bit PCM, and finalizes capture windows to WAV files.
+///
+/// Engine lifetime and capture are separate on purpose: during a keyboard
+/// session the engine runs continuously (an active audio session is what
+/// keeps the app alive in the background), while capture only spans one
+/// dictation. Buffers outside a capture window are discarded.
+///
+/// The tap callback runs on an audio thread, so mutable state is lock-guarded.
 final class AudioRecorder: @unchecked Sendable {
     static let sampleRate: Double = 16_000
 
     private let engine = AVAudioEngine()
     private let lock = NSLock()
     private var samples = Data()
+    private var capturing = false
     private var converter: AVAudioConverter?
 
-    /// Called on the main queue with a 0...1 mic level while recording.
+    /// Called on the main queue with a 0...1 mic level while the engine runs.
     var onLevel: (@Sendable (Float) -> Void)?
 
-    private(set) var isRecording = false
+    private(set) var isEngineRunning = false
+
+    var isCapturing: Bool {
+        lock.withLock { capturing }
+    }
 
     static func requestPermission() async -> Bool {
         await AVAudioApplication.requestRecordPermission()
     }
 
-    func start() throws {
-        guard !isRecording else { return }
+    // MARK: Engine lifecycle
+
+    func startEngine() throws {
+        guard !isEngineRunning else { return }
 
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP, .defaultToSpeaker])
@@ -40,33 +53,52 @@ final class AudioRecorder: @unchecked Sendable {
         }
         converter = AVAudioConverter(from: inputFormat, to: targetFormat)
 
-        lock.withLock { samples = Data() }
-
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             self?.consume(buffer, targetFormat: targetFormat)
         }
         engine.prepare()
         try engine.start()
-        isRecording = true
+        isEngineRunning = true
     }
 
-    /// Stops capturing and returns the recording as a complete WAV file.
-    func stop() -> Data {
-        guard isRecording else { return Data() }
+    func stopEngine() {
+        guard isEngineRunning else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        isRecording = false
+        isEngineRunning = false
+        lock.withLock {
+            capturing = false
+            samples = Data()
+        }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        DispatchQueue.main.async { [onLevel] in onLevel?(0) }
+    }
+
+    // MARK: Capture windows
+
+    func beginCapture() {
+        lock.withLock {
+            samples = Data()
+            capturing = true
+        }
+    }
+
+    /// Ends the capture window and returns it as a complete WAV file.
+    func endCapture() -> Data {
         let pcm = lock.withLock {
+            capturing = false
             let data = samples
             samples = Data()
             return data
         }
-        DispatchQueue.main.async { [onLevel] in onLevel?(0) }
         return Self.wavFile(fromPCM: pcm)
     }
 
-    func cancel() {
-        _ = stop()
+    func cancelCapture() {
+        lock.withLock {
+            capturing = false
+            samples = Data()
+        }
     }
 
     // MARK: Audio thread
@@ -96,15 +128,18 @@ final class AudioRecorder: @unchecked Sendable {
         guard frameCount > 0 else { return }
 
         var sumSquares: Float = 0
-        let chunk = channel[0].withMemoryRebound(to: UInt8.self, capacity: frameCount * 2) {
-            Data(bytes: $0, count: frameCount * 2)
-        }
         for frame in 0..<frameCount {
             let normalized = Float(channel[0][frame]) / Float(Int16.max)
             sumSquares += normalized * normalized
         }
 
-        lock.withLock { samples.append(chunk) }
+        lock.withLock {
+            guard capturing else { return }
+            let chunk = channel[0].withMemoryRebound(to: UInt8.self, capacity: frameCount * 2) {
+                Data(bytes: $0, count: frameCount * 2)
+            }
+            samples.append(chunk)
+        }
 
         // Map RMS to a 0...1 level with a floor so quiet speech still registers.
         let rms = sqrt(sumSquares / Float(frameCount))

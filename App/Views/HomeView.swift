@@ -5,16 +5,26 @@ import SwiftUI
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var model = HomeViewModel()
+    @State private var session = SessionController.shared
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
+                sessionCard
                 stylePicker
                 Spacer()
-                recordButton
-                Text(model.statusText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if session.isActive {
+                    Label("Session running — dictate from the Voice Typer keyboard in any app.", systemImage: "keyboard.badge.ellipsis")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                } else {
+                    recordButton
+                    Text(model.statusText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 resultSection
             }
@@ -29,6 +39,37 @@ struct HomeView: View {
                 Text(model.errorMessage)
             }
         }
+    }
+
+    private var sessionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Keyboard Session", systemImage: "keyboard.badge.waveform")
+                    .font(.headline)
+                Spacer()
+                Button(session.isActive ? "End" : "Start") {
+                    if session.isActive {
+                        session.stop()
+                    } else {
+                        Task { await session.start() }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(session.isActive ? .red : .accentColor)
+            }
+            Text(session.isActive
+                 ? "Microphone session is live. The Voice Typer keyboard can now dictate anywhere. Ending the session or force-quitting this app stops it."
+                 : "Start a session to dictate from the Voice Typer keyboard in other apps. The mic indicator stays on while a session runs.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let error = session.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding()
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var stylePicker: some View {
@@ -145,7 +186,8 @@ final class HomeViewModel {
                 return
             }
             do {
-                try recorder.start()
+                try recorder.startEngine()
+                recorder.beginCapture()
                 isRecording = true
                 rawText = ""
                 polishedText = ""
@@ -156,7 +198,8 @@ final class HomeViewModel {
     }
 
     private func finishRecording() {
-        let wav = recorder.stop()
+        let wav = recorder.endCapture()
+        recorder.stopEngine()
         isRecording = false
         isTranscribing = true
 
