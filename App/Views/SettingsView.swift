@@ -15,6 +15,7 @@ struct SettingsView: View {
                 asrSection
                 polishSection
                 translationSection
+                sessionSection
             }
             .navigationTitle("Settings")
             .onChange(of: settings) { SettingsStore.save(settings) }
@@ -90,6 +91,20 @@ struct SettingsView: View {
             }
         } header: {
             Text("Translate style")
+        }
+    }
+
+    private var sessionSection: some View {
+        Section {
+            Picker("Auto-end after", selection: $settings.sessionAutoEndMinutes) {
+                ForEach(ProviderSettings.autoEndChoices, id: \.minutes) { choice in
+                    Text(choice.label).tag(choice.minutes)
+                }
+            }
+        } header: {
+            Text("Keyboard session")
+        } footer: {
+            Text("A running session keeps the microphone active so the keyboard can dictate. Auto-ending limits battery use if you forget to stop it.")
         }
     }
 

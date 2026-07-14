@@ -144,7 +144,6 @@ final class VoicePanelModel {
             return
         }
         insert(result.polishedText)
-        phase = .idle
     }
 
     private func consumeState() {
@@ -184,10 +183,28 @@ final class VoicePanelModel {
         deleteBackwardHandler()
     }
 
+    /// Streams the text in character-by-character for a typing feel, capped
+    /// at ~1.5 s total so long dictations don't crawl.
     private func insert(_ text: String) {
-        guard !text.isEmpty else { return }
-        insertTextHandler(text)
+        guard !text.isEmpty else {
+            phase = .idle
+            return
+        }
         lastInsertedText = text
+        let delayMS = min(6, 1500 / text.count)
+        guard delayMS >= 1 else {
+            insertTextHandler(text)
+            phase = .idle
+            return
+        }
+        phase = .processing
+        Task { @MainActor in
+            for character in text {
+                insertTextHandler(String(character))
+                try? await Task.sleep(for: .milliseconds(delayMS))
+            }
+            phase = .idle
+        }
     }
 
     func undoLastInsert() {

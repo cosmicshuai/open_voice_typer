@@ -15,6 +15,9 @@ struct VoicePanelView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        // Keep controls reachable on iPad instead of stretching edge to edge.
+        .frame(maxWidth: 600)
+        .frame(maxWidth: .infinity)
     }
 
     private var topBar: some View {

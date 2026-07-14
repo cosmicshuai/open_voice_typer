@@ -44,6 +44,16 @@ struct ProviderSettings: Codable, Equatable, Sendable {
 
     var selectedStyleID: String = Style.light.id
     var targetLanguage: String = "English"
+
+    /// Keyboard session auto-end, in minutes; 0 means never.
+    var sessionAutoEndMinutes: Int = 15
+
+    static let autoEndChoices: [(label: String, minutes: Int)] = [
+        ("5 minutes", 5),
+        ("15 minutes", 15),
+        ("1 hour", 60),
+        ("Never", 0),
+    ]
 }
 
 enum SettingsStore {

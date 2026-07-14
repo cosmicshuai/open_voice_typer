@@ -20,6 +20,7 @@ final class SessionController {
     let recorder = AudioRecorder()
 
     private var heartbeatTimer: Timer?
+    private var autoEndTimer: Timer?
     private var commandToken: DarwinNotifier.ObservationToken?
     private var activeCommand: KeyboardCommand?
     private var lastLevelPublish: Date = .distantPast
@@ -59,6 +60,16 @@ final class SessionController {
             Task { @MainActor in SessionController.shared.beat() }
         }
 
+        let autoEndMinutes = SettingsStore.load().sessionAutoEndMinutes
+        if autoEndMinutes > 0 {
+            autoEndTimer = Timer.scheduledTimer(
+                withTimeInterval: TimeInterval(autoEndMinutes * 60),
+                repeats: false
+            ) { _ in
+                Task { @MainActor in SessionController.shared.stop() }
+            }
+        }
+
         DictationBridge.publish(PipelineState(phase: .idle))
         // Catch a command the keyboard may have queued while we were starting.
         handlePendingCommand()
@@ -68,6 +79,8 @@ final class SessionController {
         guard isActive else { return }
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
+        autoEndTimer?.invalidate()
+        autoEndTimer = nil
         commandToken = nil
         recorder.stopEngine()
         isActive = false
