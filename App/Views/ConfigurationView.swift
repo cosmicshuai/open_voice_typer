@@ -18,7 +18,7 @@ struct ConfigurationView: View {
                 translateSection
                 aboutSection
             }
-            .navigationTitle("Configuration")
+            .navigationTitle("Settings")
             .onChange(of: settings) { SettingsStore.save(settings) }
             .sheet(item: $editingKey, onDismiss: { keyStateVersion += 1 }) { context in
                 KeyEditorSheet(context: context)

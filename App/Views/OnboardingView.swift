@@ -104,7 +104,7 @@ struct OnboardingView: View {
             ) { cloudSelected = false }
             engineOption(
                 title: "Cloud — bring your key",
-                detail: "OpenAI, Groq, Anthropic, Gemini. Higher accuracy and AI polish. Add keys any time in Configuration.",
+                detail: "OpenAI, Groq, Anthropic, Gemini. Higher accuracy and AI polish. Add keys any time in Settings.",
                 selected: cloudSelected
             ) { cloudSelected = true }
         }
