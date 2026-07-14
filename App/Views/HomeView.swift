@@ -215,7 +215,9 @@ final class HomeViewModel {
                     rawText: outcome.rawText,
                     polishedText: outcome.polishedText,
                     styleID: style.id,
-                    source: .app
+                    source: .app,
+                    engineName: outcome.engineName,
+                    audioSeconds: outcome.audioSeconds
                 ))
             } catch {
                 present(error)

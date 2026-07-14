@@ -157,7 +157,9 @@ final class SessionController {
             rawText: outcome.rawText,
             polishedText: outcome.polishedText,
             styleID: styleID,
-            source: .keyboard
+            source: .keyboard,
+            engineName: outcome.engineName,
+            audioSeconds: outcome.audioSeconds
         ))
     }
 
