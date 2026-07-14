@@ -90,7 +90,7 @@ struct SettingsView: View {
                 plainField("English", text: $settings.targetLanguage)
             }
         } header: {
-            Text("Translate style")
+            Text("Translate template")
         }
     }
 

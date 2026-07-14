@@ -24,8 +24,8 @@ struct RootView: View {
             Tab("History", systemImage: "clock") {
                 HistoryView()
             }
-            Tab("Styles", systemImage: "wand.and.stars") {
-                StylesView()
+            Tab("Templates", systemImage: "wand.and.stars") {
+                TemplatesView()
             }
             Tab("Dictionary", systemImage: "character.book.closed") {
                 DictionaryView()

@@ -73,7 +73,7 @@ struct HomeView: View {
     }
 
     private var stylePicker: some View {
-        Picker("Style", selection: $model.selectedStyleID) {
+        Picker("Template", selection: $model.selectedStyleID) {
             ForEach(model.styles) { style in
                 Text(style.name).tag(style.id)
             }
