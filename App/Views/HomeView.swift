@@ -55,7 +55,7 @@ struct HomeView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(session.isActive ? .red : .accentColor)
+                .tint(session.isActive ? .red : .appAccent)
             }
             Text(session.isActive
                  ? "Microphone session is live. The Voice Typer keyboard can now dictate anywhere. Ending the session or force-quitting this app stops it."
@@ -86,7 +86,7 @@ struct HomeView: View {
         Button(action: { model.toggleRecording() }) {
             ZStack {
                 Circle()
-                    .fill(model.isRecording ? Color.red : Color.accentColor)
+                    .fill(model.isRecording ? Color.red : Color.appAccent)
                     .frame(width: 96, height: 96)
                     .scaleEffect(1 + CGFloat(model.audioLevel) * 0.35)
                     .animation(.easeOut(duration: 0.1), value: model.audioLevel)

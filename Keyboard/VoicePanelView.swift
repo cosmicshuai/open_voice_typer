@@ -86,7 +86,7 @@ struct VoicePanelView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(model.phase == .recording ? Color.red : Color.accentColor)
+                            .fill(model.phase == .recording ? Color.red : Color.appAccent)
                             .frame(width: 64, height: 64)
                             .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.3 : 1)
                             .animation(.easeOut(duration: 0.12), value: model.audioLevel)

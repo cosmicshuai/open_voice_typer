@@ -13,7 +13,7 @@ final class KeyboardViewController: UIInputViewController {
         model.deleteBackwardHandler = { [weak self] in self?.textDocumentProxy.deleteBackward() }
         self.model = model
 
-        let panel = UIHostingController(rootView: VoicePanelView(model: model))
+        let panel = UIHostingController(rootView: VoicePanelView(model: model).tint(Color.appAccent))
         panel.view.translatesAutoresizingMaskIntoConstraints = false
         panel.view.backgroundColor = .clear
         addChild(panel)

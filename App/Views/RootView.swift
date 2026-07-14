@@ -1,7 +1,22 @@
 import SwiftUI
 
 struct RootView: View {
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var showOnboarding = false
+
     var body: some View {
+        tabs
+            .tint(.appAccent)
+            .onAppear { showOnboarding = !hasCompletedOnboarding }
+            .fullScreenCover(isPresented: $showOnboarding, onDismiss: {
+                hasCompletedOnboarding = true
+            }) {
+                OnboardingView(isPresented: $showOnboarding)
+                    .tint(.appAccent)
+            }
+    }
+
+    private var tabs: some View {
         TabView {
             Tab("Dictate", systemImage: "mic.fill") {
                 HomeView()
