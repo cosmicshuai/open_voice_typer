@@ -30,8 +30,8 @@ struct RootView: View {
             Tab("Dictionary", systemImage: "character.book.closed") {
                 DictionaryView()
             }
-            Tab("Settings", systemImage: "gearshape") {
-                SettingsView()
+            Tab("Config", systemImage: "gearshape") {
+                ConfigurationView()
             }
         }
     }
