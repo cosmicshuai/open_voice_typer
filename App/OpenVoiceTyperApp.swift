@@ -1,10 +1,12 @@
+import SwiftData
 import SwiftUI
 
 @main
 struct OpenVoiceTyperApp: App {
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            RootView()
         }
+        .modelContainer(for: TranscriptRecord.self)
     }
 }

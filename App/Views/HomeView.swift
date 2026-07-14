@@ -3,6 +3,7 @@ import SwiftUI
 /// In-app dictation: record, transcribe, polish, copy. This screen makes the
 /// app usable standalone before the keyboard extension lands.
 struct HomeView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var model = HomeViewModel()
 
     var body: some View {
@@ -19,6 +20,9 @@ struct HomeView: View {
             }
             .padding()
             .navigationTitle("Open Voice Typer")
+            .onAppear {
+                model.onCompleted = { record in modelContext.insert(record) }
+            }
             .alert("Dictation failed", isPresented: $model.showError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -112,6 +116,7 @@ final class HomeViewModel {
     var polishedText = ""
     var showError = false
     var errorMessage = ""
+    var onCompleted: ((TranscriptRecord) -> Void)?
 
     var isBusy: Bool { isRecording || isTranscribing }
 
@@ -163,6 +168,12 @@ final class HomeViewModel {
                 let outcome = try await DictationPipeline(settings: settings).run(wavData: wav, style: style)
                 rawText = outcome.rawText
                 polishedText = outcome.polishedText
+                onCompleted?(TranscriptRecord(
+                    rawText: outcome.rawText,
+                    polishedText: outcome.polishedText,
+                    styleID: style.id,
+                    source: .app
+                ))
             } catch {
                 present(error)
             }
