@@ -12,8 +12,10 @@ iOS keyboard extensions cannot access the microphone, so recording happens in th
 
 ## Providers (bring your own keys)
 
-- **ASR**: any OpenAI-compatible endpoint (OpenAI, Groq, …) or Apple on-device speech (free, offline, no key).
-- **Polish**: any OpenAI-compatible chat endpoint, Anthropic, or Google Gemini.
+- **ASR**: any OpenAI-compatible endpoint — OpenAI, Groq, Zhipu **GLM-ASR** (`glm-asr-2512`) — or Apple on-device speech (free, offline, no key).
+- **Polish**: any OpenAI-compatible chat endpoint — OpenAI, Groq, **DeepSeek V4** (`deepseek-v4-flash` / `-pro`) — plus native Anthropic and Google Gemini.
+
+Settings includes one-tap presets for OpenAI, Groq, DeepSeek V4, and Zhipu GLM (China + international endpoints).
 
 Keys are stored in the iOS Keychain and only ever read by the main app — never by the keyboard extension.
 

@@ -37,13 +37,18 @@ struct ConfigurationView: View {
             }
             .pickerStyle(.segmented)
             if settings.asrBackend == .openAICompatible {
+                presetRow(ProviderPreset.asr) { preset in
+                    settings.asrBaseURL = preset.baseURL
+                    settings.asrModel = preset.model
+                }
                 LabeledContent("Base URL") {
                     plainField("https://api.openai.com/v1", text: $settings.asrBaseURL)
                 }
                 LabeledContent("Model") {
                     plainField("gpt-4o-transcribe", text: $settings.asrModel)
                 }
-                keyRow("API Key", key: .asrAPIKey, target: .openAICompatible(baseURL: settings.asrBaseURL))
+                keyRow("API Key", key: .asrAPIKey, target: .openAICompatible(baseURL: settings.asrBaseURL),
+                       getKeyURL: keyConsoleURL(forBaseURL: settings.asrBaseURL))
             }
             LabeledContent("Language") {
                 plainField("auto", text: $settings.asrLanguage)
@@ -68,13 +73,18 @@ struct ConfigurationView: View {
             }
             switch settings.polishBackend {
             case .openAICompatible:
+                presetRow(ProviderPreset.polish) { preset in
+                    settings.polishBaseURL = preset.baseURL
+                    settings.polishModel = preset.model
+                }
                 LabeledContent("Base URL") {
                     plainField("https://api.openai.com/v1", text: $settings.polishBaseURL)
                 }
                 LabeledContent("Model") {
                     plainField("gpt-4o-mini", text: $settings.polishModel)
                 }
-                keyRow("API Key", key: .polishOpenAIKey, target: .openAICompatible(baseURL: settings.polishBaseURL))
+                keyRow("API Key", key: .polishOpenAIKey, target: .openAICompatible(baseURL: settings.polishBaseURL),
+                       getKeyURL: keyConsoleURL(forBaseURL: settings.polishBaseURL))
             case .anthropic:
                 LabeledContent("Model") {
                     plainField("claude-sonnet-5", text: $settings.anthropicModel)
@@ -131,6 +141,37 @@ struct ConfigurationView: View {
     }
 
     // MARK: Pieces
+
+    private func presetRow(
+        _ presets: [ProviderPreset],
+        apply: @escaping (ProviderPreset) -> Void
+    ) -> some View {
+        Menu {
+            ForEach(presets) { preset in
+                Button(preset.name) { apply(preset) }
+            }
+        } label: {
+            LabeledContent("Preset") {
+                HStack(spacing: 4) {
+                    Text("Choose…")
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(Color.appAccent)
+            }
+        }
+    }
+
+    /// Where to create an API key, recognized from the endpoint host.
+    private func keyConsoleURL(forBaseURL baseURL: String) -> String? {
+        let host = URL(string: baseURL)?.host() ?? baseURL
+        if host.contains("openai.com") { return "https://platform.openai.com/api-keys" }
+        if host.contains("groq.com") { return "https://console.groq.com/keys" }
+        if host.contains("deepseek.com") { return "https://platform.deepseek.com/api_keys" }
+        if host.contains("z.ai") { return "https://z.ai/manage-apikey/apikey-list" }
+        if host.contains("bigmodel.cn") { return "https://open.bigmodel.cn/usercenter/apikeys" }
+        return nil
+    }
 
     private func keyRow(
         _ label: String,
