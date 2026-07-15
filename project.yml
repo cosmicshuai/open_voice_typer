@@ -66,6 +66,29 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shuaiwang.openvoicetyper.keyboard
 
+  OpenVoiceTyperTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+    dependencies:
+      - target: OpenVoiceTyper
+
+  OpenVoiceTyperUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: OpenVoiceTyper
+    dependencies:
+      - target: OpenVoiceTyper
+
 schemes:
   OpenVoiceTyper:
     build:
@@ -73,3 +96,7 @@ schemes:
         OpenVoiceTyper: all
     run:
       config: Debug
+    test:
+      targets:
+        - OpenVoiceTyperTests
+        - OpenVoiceTyperUITests
