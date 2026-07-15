@@ -21,6 +21,7 @@ enum ASRError: LocalizedError {
     case emptyTranscript
     case speechPermissionDenied
     case recognizerUnavailable
+    case appleRecognitionFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -36,6 +37,8 @@ enum ASRError: LocalizedError {
             "Speech recognition permission was denied. Enable it in iOS Settings."
         case .recognizerUnavailable:
             "On-device speech recognition is unavailable for the selected language."
+        case .appleRecognitionFailed(let reason):
+            "Apple speech recognition failed: \(reason) Check that Siri & Dictation is enabled in iOS Settings, or switch to a cloud engine in Settings."
         }
     }
 }
