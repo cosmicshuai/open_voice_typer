@@ -56,6 +56,28 @@ struct ProviderSettings: Codable, Equatable, Sendable {
     ]
 }
 
+/// One-tap base URL + model for a known OpenAI-compatible provider.
+struct ProviderPreset: Identifiable {
+    let name: String
+    let baseURL: String
+    let model: String
+    var id: String { name }
+
+    static let asr: [ProviderPreset] = [
+        .init(name: "OpenAI", baseURL: "https://api.openai.com/v1", model: "gpt-4o-transcribe"),
+        .init(name: "Groq", baseURL: "https://api.groq.com/openai/v1", model: "whisper-large-v3-turbo"),
+        .init(name: "Zhipu GLM (International)", baseURL: "https://api.z.ai/api/paas/v4", model: "glm-asr-2512"),
+        .init(name: "Zhipu GLM (China)", baseURL: "https://open.bigmodel.cn/api/paas/v4", model: "glm-asr-2512"),
+    ]
+
+    static let polish: [ProviderPreset] = [
+        .init(name: "OpenAI", baseURL: "https://api.openai.com/v1", model: "gpt-4o-mini"),
+        .init(name: "Groq", baseURL: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile"),
+        .init(name: "DeepSeek V4 Flash", baseURL: "https://api.deepseek.com", model: "deepseek-v4-flash"),
+        .init(name: "DeepSeek V4 Pro", baseURL: "https://api.deepseek.com", model: "deepseek-v4-pro"),
+    ]
+}
+
 enum SettingsStore {
     private static let key = "settings.providers"
 
