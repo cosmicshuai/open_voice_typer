@@ -25,12 +25,39 @@ struct AppleSpeechASR: ASRProvider {
         try request.wavData.write(to: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
+        // supportsOnDeviceRecognition can report true while the on-device
+        // model assets are absent (simulators always; devices until iOS has
+        // downloaded dictation assets), which fails with "Failed to
+        // initialize recognizer". Prefer on-device, fall back to Apple's
+        // server-based recognition.
+        if recognizer.supportsOnDeviceRecognition {
+            do {
+                return try await recognize(with: recognizer, fileURL: fileURL, hotwords: request.hotwords, onDeviceOnly: true)
+            } catch let error as ASRError {
+                throw error
+            } catch {
+                // Fall through to the network path below.
+            }
+        }
+        do {
+            return try await recognize(with: recognizer, fileURL: fileURL, hotwords: request.hotwords, onDeviceOnly: false)
+        } catch let error as ASRError {
+            throw error
+        } catch {
+            throw ASRError.appleRecognitionFailed(error.localizedDescription)
+        }
+    }
+
+    private func recognize(
+        with recognizer: SFSpeechRecognizer,
+        fileURL: URL,
+        hotwords: [String],
+        onDeviceOnly: Bool
+    ) async throws -> String {
         let recognitionRequest = SFSpeechURLRecognitionRequest(url: fileURL)
         recognitionRequest.shouldReportPartialResults = false
-        recognitionRequest.contextualStrings = request.hotwords
-        if recognizer.supportsOnDeviceRecognition {
-            recognitionRequest.requiresOnDeviceRecognition = true
-        }
+        recognitionRequest.contextualStrings = hotwords
+        recognitionRequest.requiresOnDeviceRecognition = onDeviceOnly
 
         let text: String = try await withCheckedThrowingContinuation { continuation in
             var task: SFSpeechRecognitionTask?
