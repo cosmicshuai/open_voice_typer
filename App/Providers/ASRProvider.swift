@@ -22,6 +22,7 @@ enum ASRError: LocalizedError {
     case speechPermissionDenied
     case recognizerUnavailable
     case appleRecognitionFailed(String)
+    case appleUnavailableInSimulator
 
     var errorDescription: String? {
         switch self {
@@ -39,6 +40,8 @@ enum ASRError: LocalizedError {
             "On-device speech recognition is unavailable for the selected language."
         case .appleRecognitionFailed(let reason):
             "Apple speech recognition failed: \(reason) Check that Siri & Dictation is enabled in iOS Settings, or switch to a cloud engine in Settings."
+        case .appleUnavailableInSimulator:
+            "Apple speech recognition is not available in the iOS Simulator. Use a cloud ASR engine (Settings → Speech to text → Cloud) or run on a real device."
         }
     }
 }

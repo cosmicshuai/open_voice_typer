@@ -7,7 +7,12 @@ struct RootView: View {
     var body: some View {
         tabs
             .tint(.appAccent)
-            .onAppear { showOnboarding = !hasCompletedOnboarding }
+            .onAppear {
+                if CommandLine.arguments.contains("--reset-onboarding") {
+                    hasCompletedOnboarding = false
+                }
+                showOnboarding = !hasCompletedOnboarding
+            }
             .fullScreenCover(isPresented: $showOnboarding, onDismiss: {
                 hasCompletedOnboarding = true
             }) {
