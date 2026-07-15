@@ -2,12 +2,20 @@ import Foundation
 
 /// Whisper-style transcription against any OpenAI-compatible endpoint:
 /// `POST {baseURL}/audio/transcriptions` (multipart). Covers OpenAI
-/// (`gpt-4o-transcribe`, `whisper-1`), Groq (`whisper-large-v3-turbo`), etc.
+/// (`gpt-4o-transcribe`, `whisper-1`), Groq (`whisper-large-v3-turbo`), and
+/// Zhipu GLM-ASR (`glm-asr-2512`, with dialect quirks handled below).
 struct OpenAICompatibleASR: ASRProvider {
     var baseURL: String
     var model: String
     var apiKey: @Sendable () -> String?
     var session: URLSession = .shared
+
+    /// Zhipu's transcription endpoint requires an explicit `stream=false`
+    /// and has no Whisper-style `prompt` hotword field.
+    private var isGLM: Bool {
+        let host = URL(string: baseURL)?.host() ?? baseURL
+        return host.contains("bigmodel.cn") || host.contains("z.ai")
+    }
 
     func transcribe(_ request: ASRRequest) async throws -> String {
         guard let key = apiKey(), !key.isEmpty else { throw ASRError.missingAPIKey }
@@ -19,11 +27,15 @@ struct OpenAICompatibleASR: ASRProvider {
         var form = MultipartForm()
         form.addFile(name: "file", filename: "audio.wav", contentType: "audio/wav", data: request.wavData)
         form.addField(name: "model", value: model)
-        form.addField(name: "response_format", value: "json")
+        if isGLM {
+            form.addField(name: "stream", value: "false")
+        } else {
+            form.addField(name: "response_format", value: "json")
+        }
         if !request.language.isEmpty {
             form.addField(name: "language", value: request.language)
         }
-        if !request.hotwords.isEmpty {
+        if !request.hotwords.isEmpty, !isGLM {
             // Whisper-style biasing: terms in the prompt are spelled as given.
             form.addField(name: "prompt", value: request.hotwords.joined(separator: ", "))
         }
