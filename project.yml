@@ -1,0 +1,75 @@
+name: OpenVoiceTyper
+options:
+  bundleIdPrefix: com.shuaiwang
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  OpenVoiceTyper:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Shared
+    entitlements:
+      path: App/OpenVoiceTyper.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.shuaiwang.openvoicetyper
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Open Voice Typer
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+        NSMicrophoneUsageDescription: Open Voice Typer records audio during a dictation session to transcribe your speech.
+        NSSpeechRecognitionUsageDescription: Used for on-device speech recognition when Apple ASR is selected.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shuaiwang.openvoicetyper
+    dependencies:
+      - target: VoiceKeyboard
+        embed: true
+
+  VoiceKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Keyboard
+      - Shared
+    entitlements:
+      path: Keyboard/VoiceKeyboard.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.shuaiwang.openvoicetyper
+    info:
+      path: Keyboard/Info.plist
+      properties:
+        CFBundleDisplayName: Voice Typer
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shuaiwang.openvoicetyper.keyboard
+
+schemes:
+  OpenVoiceTyper:
+    build:
+      targets:
+        OpenVoiceTyper: all
+    run:
+      config: Debug
