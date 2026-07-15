@@ -1,14 +1,19 @@
-import UIKit
 import SwiftUI
+import UIKit
 
 final class KeyboardViewController: UIInputViewController {
+    private var model: VoicePanelModel?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        let panel = UIHostingController(rootView: VoicePanelPlaceholderView(
-            needsInputModeSwitchKey: needsInputModeSwitchKey,
-            onGlobe: { [weak self] in self?.advanceToNextInputMode() }
-        ))
+        let model = VoicePanelModel(needsInputModeSwitchKey: needsInputModeSwitchKey)
+        model.onGlobe = { [weak self] in self?.advanceToNextInputMode() }
+        model.insertTextHandler = { [weak self] text in self?.textDocumentProxy.insertText(text) }
+        model.deleteBackwardHandler = { [weak self] in self?.textDocumentProxy.deleteBackward() }
+        self.model = model
+
+        let panel = UIHostingController(rootView: VoicePanelView(model: model).tint(Color.appAccent))
         panel.view.translatesAutoresizingMaskIntoConstraints = false
         panel.view.backgroundColor = .clear
         addChild(panel)
@@ -23,26 +28,14 @@ final class KeyboardViewController: UIInputViewController {
             panel.view.heightAnchor.constraint(equalToConstant: 260),
         ])
     }
-}
 
-/// Placeholder panel; replaced by the real voice panel in a later PR.
-struct VoicePanelPlaceholderView: View {
-    let needsInputModeSwitchKey: Bool
-    let onGlobe: () -> Void
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        model?.activate()
+    }
 
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "mic.circle")
-                .font(.system(size: 44))
-            Text("Voice Typer")
-                .font(.headline)
-            if needsInputModeSwitchKey {
-                Button(action: onGlobe) {
-                    Image(systemName: "globe")
-                        .font(.title2)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    override func viewWillDisappear(_ animated: Bool) {
+        model?.deactivate()
+        super.viewWillDisappear(animated)
     }
 }
