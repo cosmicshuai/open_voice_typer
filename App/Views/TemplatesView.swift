@@ -116,6 +116,9 @@ struct TemplatesView: View {
         activeStyleID = style.id
         var settings = SettingsStore.load()
         settings.selectedStyleID = style.id
+        if style.id != Style.translate.id {
+            settings.lastDictateStyleID = style.id
+        }
         SettingsStore.save(settings)
     }
 

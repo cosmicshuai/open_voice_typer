@@ -31,6 +31,13 @@ final class VoicePanelModel {
     /// discarded locally — no round trip to the app, nothing to wait for.
     static let minRecordingSeconds: TimeInterval = 0.6
 
+    /// Dictate inserts what you said (via the selected template); Translate
+    /// rides the built-in Translate style into the configured target language.
+    enum Mode: Equatable {
+        case dictate
+        case translate
+    }
+
     var phase: Phase = .idle
     var audioLevel: Float = 0
     var styles: [Style] = []
@@ -38,9 +45,14 @@ final class VoicePanelModel {
         didSet {
             var settings = SettingsStore.load()
             settings.selectedStyleID = selectedStyleID
+            if selectedStyleID != Style.translate.id {
+                settings.lastDictateStyleID = selectedStyleID
+            }
             SettingsStore.save(settings)
         }
     }
+    /// Shown next to the Translate mode; refreshed on activation.
+    private(set) var targetLanguage = "English"
 
     let needsInputModeSwitchKey: Bool
     var onGlobe: () -> Void = {}
@@ -79,6 +91,29 @@ final class VoicePanelModel {
         styles.first { $0.id == selectedStyleID }?.name ?? "Style"
     }
 
+    /// The mode is just a view on the selected style — Translate style means
+    /// translate mode, anything else is dictate.
+    var mode: Mode {
+        selectedStyleID == Style.translate.id ? .translate : .dictate
+    }
+
+    /// Templates offered in dictate mode; Translate lives behind the toggle.
+    var dictateStyles: [Style] {
+        styles.filter { $0.id != Style.translate.id }
+    }
+
+    func setMode(_ newMode: Mode) {
+        guard newMode != mode else { return }
+        switch newMode {
+        case .translate:
+            // lastDictateStyleID already holds the current template — every
+            // non-translate selection is stashed there on write.
+            selectedStyleID = Style.translate.id
+        case .dictate:
+            selectedStyleID = SettingsStore.load().lastDictateStyleID
+        }
+    }
+
     var statusText: String {
         switch phase {
         case .recording: "Listening… tap to finish"
@@ -96,7 +131,9 @@ final class VoicePanelModel {
             return
         }
         styles = SharedCatalog.loadStyles()
-        selectedStyleID = SettingsStore.load().selectedStyleID
+        let settings = SettingsStore.load()
+        selectedStyleID = settings.selectedStyleID
+        targetLanguage = settings.targetLanguage
 
         tokens = [
             DarwinNotifier.observe(.resultPosted) { [weak self] in

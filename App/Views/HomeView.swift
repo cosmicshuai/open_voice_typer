@@ -11,18 +11,22 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                stylePicker
-                Spacer()
-                recordButton
-                Text(model.statusText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                resultSection
-                keyboardFooter
+            ZStack {
+                backgroundWash
+                VStack(spacing: 20) {
+                    styleChips
+                    Spacer()
+                    recordButton
+                    Text(model.statusText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .animation(.default, value: model.statusText)
+                    Spacer()
+                    resultSection
+                    keyboardFooter
+                }
+                .padding()
             }
-            .padding()
             .navigationTitle("Open Voice Typer")
             .onAppear {
                 model.onCompleted = { record in modelContext.insert(record) }
@@ -35,28 +39,73 @@ struct HomeView: View {
         }
     }
 
-    private var stylePicker: some View {
-        Picker("Template", selection: $model.selectedStyleID) {
-            ForEach(model.styles) { style in
-                Text(style.name).tag(style.id)
+    /// A quiet accent-tinted wash from the top so the screen has depth
+    /// without competing with content. Adapts to both appearances.
+    private var backgroundWash: some View {
+        LinearGradient(
+            colors: [Color.appAccent.opacity(0.12), .clear],
+            startPoint: .top,
+            endPoint: .center
+        )
+        .ignoresSafeArea()
+    }
+
+    /// Template picker as scrollable capsule chips — same design language as
+    /// History's filters, and it doesn't cramp when custom templates exist.
+    private var styleChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(model.styles) { style in
+                    let isOn = style.id == model.selectedStyleID
+                    Button {
+                        model.selectedStyleID = style.id
+                    } label: {
+                        Text(style.name)
+                            .font(.footnote.weight(.medium))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                isOn ? AnyShapeStyle(LinearGradient.appAccentFill) : AnyShapeStyle(.quaternary),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(isOn ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
         }
-        .pickerStyle(.segmented)
         .disabled(model.isBusy)
+        .opacity(model.isBusy ? 0.5 : 1)
     }
 
     private var recordButton: some View {
         Button(action: { model.toggleRecording() }) {
             ZStack {
+                if model.isRecording {
+                    PulseRing(delay: 0)
+                    PulseRing(delay: 0.7)
+                }
                 Circle()
-                    .fill(model.isRecording ? Color.red : Color.appAccent)
-                    .frame(width: 96, height: 96)
+                    .fill(model.isRecording ? LinearGradient.recordingFill : .appAccentFill)
+                    .frame(width: 104, height: 104)
                     .scaleEffect(1 + CGFloat(model.audioLevel) * 0.35)
                     .animation(.easeOut(duration: 0.1), value: model.audioLevel)
+                    .shadow(
+                        color: (model.isRecording ? Color.red : Color.appAccent).opacity(0.35),
+                        radius: 18, y: 8
+                    )
+                    .overlay {
+                        Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                    }
                 Image(systemName: model.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 36))
+                    .font(.system(size: 38))
                     .foregroundStyle(.white)
+                    .contentTransition(.symbolEffect(.replace))
             }
+            .frame(width: 180, height: 180)
+            .animation(.spring(duration: 0.35), value: model.isRecording)
         }
         .buttonStyle(.plain)
         .disabled(model.isTranscribing)
@@ -66,16 +115,11 @@ struct HomeView: View {
     @ViewBuilder
     private var resultSection: some View {
         if !model.polishedText.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Result").font(.headline)
                     Spacer()
-                    Button {
-                        UIPasteboard.general.string = model.polishedText
-                    } label: {
-                        Label("Copy", systemImage: "doc.on.doc")
-                    }
-                    .font(.subheadline)
+                    CopyButton(text: model.polishedText)
                 }
                 ScrollView {
                     Text(model.polishedText)
@@ -95,8 +139,10 @@ struct HomeView: View {
                     .font(.subheadline)
                 }
             }
-            .padding()
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+            .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -119,6 +165,47 @@ struct HomeView: View {
     }
 }
 
+/// Expanding ring that radiates from the mic button while recording.
+private struct PulseRing: View {
+    let delay: Double
+    @State private var animating = false
+
+    var body: some View {
+        Circle()
+            .stroke(Color.red.opacity(0.4), lineWidth: 2)
+            .frame(width: 104, height: 104)
+            .scaleEffect(animating ? 1.65 : 1)
+            .opacity(animating ? 0 : 0.8)
+            .animation(
+                .easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(delay),
+                value: animating
+            )
+            .onAppear { animating = true }
+    }
+}
+
+/// Copy with a moment of visible confirmation.
+private struct CopyButton: View {
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            UIPasteboard.general.string = text
+            withAnimation { copied = true }
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                withAnimation { copied = false }
+            }
+        } label: {
+            Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(copied ? .green : Color.appAccent)
+    }
+}
+
 @MainActor
 @Observable
 final class HomeViewModel {
@@ -127,6 +214,9 @@ final class HomeViewModel {
         didSet {
             var settings = SettingsStore.load()
             settings.selectedStyleID = selectedStyleID
+            if selectedStyleID != Style.translate.id {
+                settings.lastDictateStyleID = selectedStyleID
+            }
             SettingsStore.save(settings)
         }
     }
