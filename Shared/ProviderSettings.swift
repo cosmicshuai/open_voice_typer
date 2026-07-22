@@ -18,12 +18,14 @@ struct ProviderSettings: Codable, Equatable, Sendable {
 
     enum PolishBackend: String, Codable, CaseIterable, Sendable {
         case openAICompatible
+        case deepseek
         case anthropic
         case gemini
 
         var displayName: String {
             switch self {
             case .openAICompatible: "OpenAI-compatible"
+            case .deepseek: "DeepSeek"
             case .anthropic: "Anthropic"
             case .gemini: "Google Gemini"
             }
@@ -39,8 +41,13 @@ struct ProviderSettings: Codable, Equatable, Sendable {
     var polishBackend: PolishBackend = .openAICompatible
     var polishBaseURL: String = "https://api.openai.com/v1"
     var polishModel: String = "gpt-4o-mini"
+    var deepseekModel: String = "deepseek-v4-flash"
     var anthropicModel: String = "claude-sonnet-5"
     var geminiModel: String = "gemini-2.5-flash"
+
+    /// DeepSeek is a fixed, known endpoint — no base URL to configure.
+    static let deepseekBaseURL = "https://api.deepseek.com/v1"
+    static let deepseekModels = ["deepseek-v4-flash", "deepseek-v4-pro"]
 
     var selectedStyleID: String = Style.light.id
     var targetLanguage: String = "English"
@@ -54,6 +61,28 @@ struct ProviderSettings: Codable, Equatable, Sendable {
         ("1 hour", 60),
         ("Never", 0),
     ]
+
+    init() {}
+
+    /// Every field is optional on decode so settings saved by an older build
+    /// (before a field existed) load intact instead of resetting to defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = ProviderSettings()
+        asrBackend = try c.decodeIfPresent(ASRBackend.self, forKey: .asrBackend) ?? defaults.asrBackend
+        asrBaseURL = try c.decodeIfPresent(String.self, forKey: .asrBaseURL) ?? defaults.asrBaseURL
+        asrModel = try c.decodeIfPresent(String.self, forKey: .asrModel) ?? defaults.asrModel
+        asrLanguage = try c.decodeIfPresent(String.self, forKey: .asrLanguage) ?? defaults.asrLanguage
+        polishBackend = try c.decodeIfPresent(PolishBackend.self, forKey: .polishBackend) ?? defaults.polishBackend
+        polishBaseURL = try c.decodeIfPresent(String.self, forKey: .polishBaseURL) ?? defaults.polishBaseURL
+        polishModel = try c.decodeIfPresent(String.self, forKey: .polishModel) ?? defaults.polishModel
+        deepseekModel = try c.decodeIfPresent(String.self, forKey: .deepseekModel) ?? defaults.deepseekModel
+        anthropicModel = try c.decodeIfPresent(String.self, forKey: .anthropicModel) ?? defaults.anthropicModel
+        geminiModel = try c.decodeIfPresent(String.self, forKey: .geminiModel) ?? defaults.geminiModel
+        selectedStyleID = try c.decodeIfPresent(String.self, forKey: .selectedStyleID) ?? defaults.selectedStyleID
+        targetLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? defaults.targetLanguage
+        sessionAutoEndMinutes = try c.decodeIfPresent(Int.self, forKey: .sessionAutoEndMinutes) ?? defaults.sessionAutoEndMinutes
+    }
 }
 
 /// One-tap base URL + model for a known OpenAI-compatible provider.
@@ -70,11 +99,11 @@ struct ProviderPreset: Identifiable {
         .init(name: "Zhipu GLM (China)", baseURL: "https://open.bigmodel.cn/api/paas/v4", model: "glm-asr-2512"),
     ]
 
+    // DeepSeek is not listed here — it is a first-class PolishBackend with
+    // its own key slot, not a base-URL preset.
     static let polish: [ProviderPreset] = [
         .init(name: "OpenAI", baseURL: "https://api.openai.com/v1", model: "gpt-4o-mini"),
         .init(name: "Groq", baseURL: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile"),
-        .init(name: "DeepSeek V4 Flash", baseURL: "https://api.deepseek.com", model: "deepseek-v4-flash"),
-        .init(name: "DeepSeek V4 Pro", baseURL: "https://api.deepseek.com", model: "deepseek-v4-pro"),
     ]
 }
 

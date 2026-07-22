@@ -23,6 +23,7 @@ final class PipelineE2ETests: XCTestCase {
         SharedCatalog.saveDictionary(savedDictionary)
         KeychainStore.delete(.asrAPIKey)
         KeychainStore.delete(.polishOpenAIKey)
+        KeychainStore.delete(.polishDeepSeekKey)
         super.tearDown()
     }
 
@@ -85,6 +86,28 @@ final class PipelineE2ETests: XCTestCase {
             .run(wavData: try fixtureWAV(), style: .raw)
         XCTAssertEqual(outcome.polishedText, "verbatim words")
         XCTAssertEqual(outcome.engineName, "whisper-1")
+    }
+
+    func testDeepSeekBackendUsesFixedEndpointAndOwnKey() async throws {
+        var settings = ProviderSettings()
+        settings.polishBackend = .deepseek
+        settings.deepseekModel = "deepseek-v4-pro"
+        KeychainStore.set("sk-ds-test", for: .polishDeepSeekKey)
+        // A key in the shared OpenAI-compatible slot must NOT be used.
+        KeychainStore.set("sk-wrong-slot", for: .polishOpenAIKey)
+
+        StubURLProtocol.stub(host: "api.deepseek.com") { request, body in
+            XCTAssertEqual(request.url?.path(), "/v1/chat/completions")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer sk-ds-test")
+            let json = try! JSONSerialization.jsonObject(with: body) as! [String: Any]
+            XCTAssertEqual(json["model"] as? String, "deepseek-v4-pro")
+            return .init(body: Data(#"{"choices":[{"message":{"content":"Polished by DeepSeek."}}]}"#.utf8))
+        }
+
+        let pipeline = DictationPipeline(settings: settings)
+        let polished = try await pipeline.polishOnly(rawText: "um hello", style: .light)
+        XCTAssertEqual(polished, "Polished by DeepSeek.")
+        XCTAssertEqual(pipeline.polishEngineName, "deepseek-v4-pro")
     }
 
     private func fixtureWAV() throws -> Data {

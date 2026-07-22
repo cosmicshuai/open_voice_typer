@@ -9,6 +9,7 @@ enum KeychainStore {
     enum Key: String, CaseIterable {
         case asrAPIKey = "asr.apiKey"
         case polishOpenAIKey = "polish.openaiCompatible.apiKey"
+        case polishDeepSeekKey = "polish.deepseek.apiKey"
         case polishAnthropicKey = "polish.anthropic.apiKey"
         case polishGeminiKey = "polish.gemini.apiKey"
     }

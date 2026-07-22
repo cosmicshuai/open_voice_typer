@@ -85,6 +85,24 @@ struct ConfigurationView: View {
                 }
                 keyRow("API Key", key: .polishOpenAIKey, target: .openAICompatible(baseURL: settings.polishBaseURL),
                        getKeyURL: keyConsoleURL(forBaseURL: settings.polishBaseURL))
+            case .deepseek:
+                Menu {
+                    ForEach(ProviderSettings.deepseekModels, id: \.self) { model in
+                        Button(model) { settings.deepseekModel = model }
+                    }
+                } label: {
+                    LabeledContent("Model") {
+                        HStack(spacing: 4) {
+                            Text(settings.deepseekModel)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(Color.appAccent)
+                    }
+                }
+                keyRow("API Key", key: .polishDeepSeekKey,
+                       target: .openAICompatible(baseURL: ProviderSettings.deepseekBaseURL),
+                       getKeyURL: "https://platform.deepseek.com/api_keys")
             case .anthropic:
                 LabeledContent("Model") {
                     plainField("claude-sonnet-5", text: $settings.anthropicModel)
