@@ -1,13 +1,16 @@
 import SwiftUI
 
-/// The keyboard's dictation surface: style pill + undo on top, Speak button
-/// in the middle, utility row (globe / space / backspace / return) below.
+/// The keyboard's dictation surface, laid out like Typeless: brand row on
+/// top (name + style capsule), a monochrome "tap to speak" pill in the
+/// middle, and utility keys (globe / undo / space / delete / return) below.
+/// All colors are semantic so the panel adapts to the host app's light or
+/// dark keyboard appearance.
 struct VoicePanelView: View {
     @Bindable var model: VoicePanelModel
 
     var body: some View {
-        VStack(spacing: 10) {
-            topBar
+        VStack(spacing: 8) {
+            brandRow
             Spacer(minLength: 0)
             speakArea
             Spacer(minLength: 0)
@@ -20,8 +23,20 @@ struct VoicePanelView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var topBar: some View {
+    // MARK: Brand row
+
+    private var brandRow: some View {
         HStack {
+            HStack(spacing: 5) {
+                Image(systemName: "waveform")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(Color.appAccent)
+                Text("Voice Typer")
+                    .font(.footnote.weight(.semibold))
+            }
+
+            Spacer()
+
             Menu {
                 ForEach(model.styles) { style in
                     Button {
@@ -47,22 +62,10 @@ struct VoicePanelView: View {
                 .background(.quaternary, in: Capsule())
             }
             .disabled(!model.canDictate)
-
-            Spacer()
-
-            Button {
-                model.undoLastInsert()
-            } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.footnote.weight(.medium))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.quaternary, in: Capsule())
-            }
-            .disabled(!model.canUndo)
-            .accessibilityLabel("Undo last insertion")
         }
     }
+
+    // MARK: Speak area
 
     @ViewBuilder
     private var speakArea: some View {
@@ -92,17 +95,21 @@ struct VoicePanelView: View {
                 } label: {
                     ZStack {
                         Capsule()
-                            .fill(model.phase == .recording ? Color.red : Color.appAccent)
+                            .fill(model.phase == .recording ? Color.red : Color.primary)
                             .frame(width: 168, height: 56)
                             .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.12 : 1)
                             .animation(.easeOut(duration: 0.12), value: model.audioLevel)
                         if model.phase == .processing {
                             ProgressView()
-                                .tint(.white)
+                                .tint(Color(uiColor: .systemBackground))
                         } else {
                             Image(systemName: model.phase == .recording ? "stop.fill" : "mic.fill")
                                 .font(.system(size: 24))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(
+                                    model.phase == .recording
+                                        ? Color.white
+                                        : Color(uiColor: .systemBackground)
+                                )
                         }
                     }
                 }
@@ -127,12 +134,17 @@ struct VoicePanelView: View {
         .padding(.horizontal, 24)
     }
 
+    // MARK: Utility row
+
     private var utilityRow: some View {
         HStack(spacing: 8) {
             if model.needsInputModeSwitchKey {
                 utilityButton(systemImage: "globe") { model.onGlobe() }
                     .accessibilityLabel("Next keyboard")
             }
+            utilityButton(systemImage: "arrow.uturn.backward") { model.undoLastInsert() }
+                .disabled(!model.canUndo)
+                .accessibilityLabel("Undo last insertion")
             Button {
                 model.insertText(" ")
             } label: {
@@ -145,8 +157,16 @@ struct VoicePanelView: View {
             .buttonStyle(.plain)
             utilityButton(systemImage: "delete.left") { model.deleteBackward() }
                 .accessibilityLabel("Delete")
-            utilityButton(systemImage: "return") { model.insertText("\n") }
-                .accessibilityLabel("Return")
+            Button {
+                model.insertText("\n")
+            } label: {
+                Text("return")
+                    .font(.subheadline)
+                    .frame(width: 76, height: 40)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Return")
         }
     }
 
@@ -154,7 +174,7 @@ struct VoicePanelView: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.subheadline)
-                .frame(width: 52, height: 40)
+                .frame(width: 44, height: 40)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
