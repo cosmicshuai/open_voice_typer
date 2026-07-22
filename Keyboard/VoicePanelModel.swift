@@ -47,12 +47,12 @@ final class VoicePanelModel {
     var insertTextHandler: (String) -> Void = { _ in }
     var deleteBackwardHandler: () -> Void = {}
 
-    /// The start-command id of the dictation we're waiting on. Mirrored into
-    /// the bridge so a result that lands while the keyboard is dismissed is
-    /// inserted when it reappears instead of being lost.
-    private var awaitingCommandID: UUID? {
-        didSet { DictationBridge.setAwaitingCommandID(awaitingCommandID) }
-    }
+    /// The start-command id of the dictation this keyboard is waiting on.
+    /// Deliberately instance-only (never shared through the bridge): each
+    /// host app runs its own keyboard extension process, so a result is only
+    /// ever inserted by the very instance that requested it — app A's
+    /// transcript can't surface in app B.
+    private var awaitingCommandID: UUID?
     private var startAcknowledged = false
     private var recordingStartedAt: Date?
     private var timeoutTask: Task<Void, Never>?
@@ -118,30 +118,27 @@ final class VoicePanelModel {
             }
         }
 
-        // Resume a dictation that was still processing when the keyboard was
-        // last dismissed — its result may already be waiting, or still coming.
-        if let pending = DictationBridge.awaitingCommandID() {
-            awaitingCommandID = pending
-            phase = .processing
-            scheduleTimeout(after: Self.resultTimeout, ifStillAwaiting: pending) { [weak self] in
-                self?.fail("Timed out waiting for the result. Try again.")
-            }
+        // A fresh keyboard instance is not waiting on anything, so any result
+        // sitting in the shared slot belongs to a *previous* dictation —
+        // very likely in another app. Discard it so it can't leak into this
+        // app's text field. (consumeResult only ever inserts a result whose
+        // id matches this instance's own awaitingCommandID, which is nil here.)
+        if DictationBridge.latestResult() != nil {
+            DictationBridge.clearResult()
         }
-
-        // Consume any waiting result BEFORE the liveness check — the session
-        // may have ended right after publishing it, and the text still counts.
-        consumeResult()
         refreshSessionState()
     }
 
     func deactivate() {
-        // A recording in flight when the keyboard closes is abandoned; tell
-        // the app to stop capturing. A *processing* dictation stays awaited
-        // (persisted) and is picked up on the next activate.
+        // Abandon any dictation in flight when the keyboard closes so its
+        // result can never surface in whatever app opens next; an active
+        // recording is also told to stop capturing. Clearing the awaited id
+        // is what guarantees a result is only inserted by the still-open
+        // instance that asked for it.
         if phase == .recording {
             DictationBridge.send(KeyboardCommand(kind: .cancelDictation, styleID: selectedStyleID))
-            awaitingCommandID = nil
         }
+        awaitingCommandID = nil
         timeoutTask?.cancel()
         timeoutTask = nil
         tokens = []
