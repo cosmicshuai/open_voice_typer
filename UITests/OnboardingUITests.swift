@@ -73,4 +73,40 @@ final class OnboardingUITests: XCTestCase {
         )
         XCTAssertFalse(app.buttons["Get started"].exists, "onboarding reappeared")
     }
+
+    /// The "Open Settings" step leaves the app, and iOS often purges it before
+    /// the user returns. Onboarding must resume where they left off, not
+    /// restart. Simulated by terminating mid-onboarding and relaunching.
+    @MainActor
+    func testOnboardingResumesAfterRelaunch() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-onboarding"]
+        app.launch()
+
+        // Advance off the welcome page onto the keyboard-setup page.
+        tapWhenReady(app.buttons["Get started"], page: "welcome")
+        XCTAssertTrue(app.buttons["Open Settings"].waitForExistence(timeout: 10),
+                      "did not reach the keyboard page")
+
+        // Simulate iOS reclaiming the app while the user is in Settings, then
+        // relaunch WITHOUT the reset argument.
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+
+        XCTAssertTrue(app.buttons["Open Settings"].waitForExistence(timeout: 10),
+                      "onboarding restarted instead of resuming at the keyboard page")
+        XCTAssertFalse(app.buttons["Get started"].exists,
+                       "onboarding fell back to the welcome page after relaunch")
+
+        // Clean up: finish onboarding so later tests see the completed state.
+        tapWhenReady(app.buttons["I'll do this later"], page: "keyboard")
+        tapWhenReady(app.buttons["Allow microphone"], page: "microphone")
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for label in ["Allow", "OK", "Allow While Using App"] {
+            let button = springboard.buttons[label]
+            if button.waitForExistence(timeout: 2) { button.tap(); break }
+        }
+        tapWhenReady(app.buttons["Start dictating"], page: "engine")
+    }
 }
