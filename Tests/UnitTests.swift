@@ -85,9 +85,28 @@ final class PromptBuilderTests: XCTestCase {
 
 final class PresetTests: XCTestCase {
     func testPresetsCoverRequestedProviders() {
-        XCTAssertTrue(ProviderPreset.polish.contains { $0.model == "deepseek-v4-flash" })
-        XCTAssertTrue(ProviderPreset.polish.contains { $0.model == "deepseek-v4-pro" })
         XCTAssertTrue(ProviderPreset.asr.contains { $0.model == "glm-asr-2512" })
+        // DeepSeek graduated from a preset to a first-class backend.
+        XCTAssertFalse(ProviderPreset.polish.contains { $0.baseURL.contains("deepseek") })
+    }
+
+    func testDeepSeekIsFirstClassPolishBackend() {
+        XCTAssertTrue(ProviderSettings.PolishBackend.allCases.contains(.deepseek))
+        XCTAssertEqual(ProviderSettings().deepseekModel, "deepseek-v4-flash")
+        XCTAssertTrue(ProviderSettings.deepseekModels.contains("deepseek-v4-pro"))
+    }
+}
+
+final class SettingsMigrationTests: XCTestCase {
+    /// Settings saved before `deepseekModel` (or any later field) existed must
+    /// decode intact, not reset to defaults.
+    func testOlderSettingsPayloadDecodesWithNewFieldsDefaulted() throws {
+        let old = #"{"asrBackend":"apple","polishBackend":"anthropic","anthropicModel":"claude-3-5-haiku","sessionAutoEndMinutes":60}"#
+        let settings = try JSONDecoder().decode(ProviderSettings.self, from: Data(old.utf8))
+        XCTAssertEqual(settings.polishBackend, .anthropic)
+        XCTAssertEqual(settings.anthropicModel, "claude-3-5-haiku")
+        XCTAssertEqual(settings.sessionAutoEndMinutes, 60)
+        XCTAssertEqual(settings.deepseekModel, "deepseek-v4-flash", "missing field should take the default")
     }
 }
 

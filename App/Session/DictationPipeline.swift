@@ -28,6 +28,7 @@ struct DictationPipeline: Sendable {
     var polishEngineName: String {
         switch settings.polishBackend {
         case .openAICompatible: settings.polishModel
+        case .deepseek: settings.deepseekModel
         case .anthropic: settings.anthropicModel
         case .gemini: settings.geminiModel
         }
@@ -93,6 +94,12 @@ struct DictationPipeline: Sendable {
                 baseURL: settings.polishBaseURL,
                 model: settings.polishModel,
                 apiKey: { KeychainStore.get(.polishOpenAIKey) }
+            )
+        case .deepseek:
+            OpenAICompatibleLLM(
+                baseURL: ProviderSettings.deepseekBaseURL,
+                model: settings.deepseekModel,
+                apiKey: { KeychainStore.get(.polishDeepSeekKey) }
             )
         case .anthropic:
             AnthropicLLM(
