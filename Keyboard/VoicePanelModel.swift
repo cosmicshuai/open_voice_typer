@@ -27,6 +27,9 @@ final class VoicePanelModel {
     static let startAckTimeout: TimeInterval = 3
     /// Ceiling for ASR + polish; beyond it the keyboard stops waiting.
     static let resultTimeout: TimeInterval = 60
+    /// A tap-start-to-stop shorter than this is treated as a misclick and
+    /// discarded locally — no round trip to the app, nothing to wait for.
+    static let minRecordingSeconds: TimeInterval = 0.6
 
     var phase: Phase = .idle
     var audioLevel: Float = 0
@@ -51,6 +54,7 @@ final class VoicePanelModel {
     /// transcript can't surface in app B.
     private var awaitingCommandID: UUID?
     private var startAcknowledged = false
+    private var recordingStartedAt: Date?
     private var timeoutTask: Task<Void, Never>?
     private var lastInsertedText = ""
     private var tokens: [DarwinNotifier.ObservationToken] = []
@@ -150,6 +154,7 @@ final class VoicePanelModel {
             let command = KeyboardCommand(kind: .startDictation, styleID: selectedStyleID)
             awaitingCommandID = command.id
             startAcknowledged = false
+            recordingStartedAt = Date()
             DictationBridge.send(command)
             phase = .recording
             audioLevel = 0
@@ -159,6 +164,19 @@ final class VoicePanelModel {
                 self.fail("The app didn't start recording. Open Open Voice Typer once, then try again.")
             }
         case .recording:
+            // A quick tap-tap (misclick) produced too little audio to be worth
+            // transcribing — cancel it locally so there's nothing to wait for.
+            if let startedAt = recordingStartedAt,
+               Date().timeIntervalSince(startedAt) < Self.minRecordingSeconds {
+                DictationBridge.send(KeyboardCommand(kind: .cancelDictation, styleID: selectedStyleID))
+                awaitingCommandID = nil
+                recordingStartedAt = nil
+                timeoutTask?.cancel()
+                timeoutTask = nil
+                phase = .error("Hold the button while you speak.")
+                return
+            }
+            recordingStartedAt = nil
             let id = awaitingCommandID
             DictationBridge.send(KeyboardCommand(kind: .stopDictation, styleID: selectedStyleID))
             phase = .processing
