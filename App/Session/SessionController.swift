@@ -52,11 +52,15 @@ final class SessionController {
     /// Starts a session without user interaction when possible. Called on
     /// app foreground so opening the app is all the setup a dictation needs
     /// (Typeless-style); never prompts for permission — the first manual
-    /// Start does that.
+    /// Start does that. Also repairs an already-active session whose engine
+    /// died while backgrounded (an interruption that couldn't be recovered
+    /// until the app came forward), so reopening the app always fixes things.
     func autoStartIfPossible() async {
-        guard !isActive,
-              AVAudioApplication.shared.recordPermission == .granted
-        else { return }
+        guard AVAudioApplication.shared.recordPermission == .granted else { return }
+        if isActive {
+            if !recorder.isEngineHealthy { try? recorder.recoverEngine() }
+            return
+        }
         await start()
     }
 
@@ -88,7 +92,7 @@ final class SessionController {
             let ended = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
                 .flatMap(AVAudioSession.InterruptionType.init) == .ended
             Task { @MainActor in
-                if ended { SessionController.shared.recoverOrStop() }
+                if ended { try? SessionController.shared.recorder.recoverEngine() }
             }
         }
 
@@ -97,19 +101,27 @@ final class SessionController {
             Task { @MainActor in SessionController.shared.beat() }
         }
 
-        let autoEndMinutes = SettingsStore.load().sessionAutoEndMinutes
-        if autoEndMinutes > 0 {
-            autoEndTimer = Timer.scheduledTimer(
-                withTimeInterval: TimeInterval(autoEndMinutes * 60),
-                repeats: false
-            ) { _ in
-                Task { @MainActor in SessionController.shared.stop() }
-            }
-        }
+        scheduleAutoEnd()
 
         DictationBridge.publish(PipelineState(phase: .idle))
         // Catch a command the keyboard may have queued while we were starting.
         handlePendingCommands()
+    }
+
+    /// (Re)arms the idle auto-end timer. Called on start and on every
+    /// dictation so the window measures inactivity, not session age — an
+    /// actively used session never expires mid-use. 0 minutes means never.
+    private func scheduleAutoEnd() {
+        autoEndTimer?.invalidate()
+        autoEndTimer = nil
+        let minutes = SettingsStore.load().sessionAutoEndMinutes
+        guard minutes > 0 else { return }
+        autoEndTimer = Timer.scheduledTimer(
+            withTimeInterval: TimeInterval(minutes * 60),
+            repeats: false
+        ) { _ in
+            Task { @MainActor in SessionController.shared.stop() }
+        }
     }
 
     func stop() {
@@ -131,26 +143,20 @@ final class SessionController {
         DictationBridge.publish(PipelineState(phase: .idle))
     }
 
-    /// The heartbeat doubles as an engine watchdog: a heartbeat must never be
-    /// published over a dead engine, or the keyboard would happily dictate
-    /// into silence after an interruption.
+    /// The heartbeat doubles as an engine watchdog. If the engine was
+    /// interrupted (a call, Siri, another audio app, the screen locking) it
+    /// tries to bring it back — but NEVER tears the session down for a
+    /// transient failure, or the user would have to reopen the app after every
+    /// blip. While the engine is unhealthy it simply withholds the heartbeat,
+    /// so the keyboard shows "open the app" for the outage and resumes on its
+    /// own once recovery succeeds (or the app is foregrounded).
     private func beat() {
         guard startedAt != nil else { return }
         if !recorder.isEngineHealthy {
-            recoverOrStop()
-            guard isActive, recorder.isEngineHealthy else { return }
+            try? recorder.recoverEngine()
+            guard recorder.isEngineHealthy else { return }
         }
         DictationBridge.publish(SessionHeartbeat(startedAt: startedAt ?? .now, lastBeatAt: .now))
-    }
-
-    private func recoverOrStop() {
-        guard isActive, !recorder.isEngineHealthy else { return }
-        do {
-            try recorder.recoverEngine()
-        } catch {
-            lastError = "Microphone session was interrupted and could not resume."
-            stop()
-        }
     }
 
     // MARK: Command handling
@@ -167,6 +173,8 @@ final class SessionController {
     }
 
     private func execute(_ command: KeyboardCommand) {
+        // Any dictation activity resets the idle auto-end window.
+        scheduleAutoEnd()
         switch command.kind {
         case .startDictation:
             guard activeCommand == nil else { return }
