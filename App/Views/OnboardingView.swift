@@ -26,10 +26,18 @@ struct OnboardingView: View {
         .background {
             ZStack {
                 Color(.systemGroupedBackground)
-                LinearGradient(
-                    colors: [Color.appAccent.opacity(0.14), .clear],
-                    startPoint: .top,
-                    endPoint: .center
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        [0, 0], [0.5, 0], [1, 0],
+                        [0, 0.5], [0.5, 0.5], [1, 0.5],
+                        [0, 1], [0.5, 1], [1, 1],
+                    ],
+                    colors: [
+                        Color.appAccent.opacity(0.30), Color.appAccent.opacity(0.10), Color.appAccentLight.opacity(0.20),
+                        Color.appAccent.opacity(0.08), Color.appAccent.opacity(0.02), Color.appAccent.opacity(0.06),
+                        Color.clear, Color.appAccent.opacity(0.04), Color.clear,
+                    ]
                 )
             }
             .ignoresSafeArea()
@@ -167,9 +175,9 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.leading)
             }
             .padding(14)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(selected ? Color.appAccent : .clear, lineWidth: 1.5)
             )
         }
@@ -209,7 +217,7 @@ private struct OnboardingPage<Content: View>: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             if let secondaryLabel, let secondaryAction {
                 Button(secondaryLabel, action: secondaryAction)
                     .font(.subheadline)
