@@ -12,7 +12,6 @@ enum DictationBridge {
         static let state = "bridge.state"
         static let result = "bridge.result"
         static let heartbeat = "bridge.sessionHeartbeat"
-        static let awaiting = "bridge.keyboardAwaiting"
     }
 
     /// False when the App Group container can't be opened (e.g. the keyboard
@@ -63,25 +62,12 @@ enum DictationBridge {
     }
 
     /// The keyboard clears a result once inserted so it is never replayed.
+    /// It is a single shared slot, so a keyboard opening in a *different* app
+    /// must discard any result it did not itself request (see
+    /// `VoicePanelModel.activate`) — otherwise app A's transcript could land
+    /// in app B's text field.
     static func clearResult() {
         AppGroup.defaults?.removeObject(forKey: Key.result)
-    }
-
-    // MARK: Keyboard in-flight dictation
-
-    /// The start-command id the keyboard is waiting on, persisted so a
-    /// dictation still processing when the keyboard is dismissed can be
-    /// picked up and inserted when the keyboard reappears.
-    static func setAwaitingCommandID(_ id: UUID?) {
-        if let id {
-            write(id, key: Key.awaiting)
-        } else {
-            AppGroup.defaults?.removeObject(forKey: Key.awaiting)
-        }
-    }
-
-    static func awaitingCommandID() -> UUID? {
-        read(UUID.self, key: Key.awaiting)
     }
 
     // MARK: Session heartbeat

@@ -8,7 +8,6 @@ final class BridgeTests: XCTestCase {
         super.setUp()
         DictationBridge.clearCommands()
         DictationBridge.clearResult()
-        DictationBridge.setAwaitingCommandID(nil)
     }
 
     func testBridgeIsAvailableInHostApp() {
@@ -45,14 +44,6 @@ final class BridgeTests: XCTestCase {
             DictationBridge.send(KeyboardCommand(kind: .cancelDictation, styleID: Style.raw.id))
         }
         XCTAssertLessThanOrEqual(DictationBridge.commandQueue().count, 8)
-    }
-
-    func testAwaitingCommandIDPersistsAcrossKeyboardLifetimes() {
-        let id = UUID()
-        DictationBridge.setAwaitingCommandID(id)
-        XCTAssertEqual(DictationBridge.awaitingCommandID(), id)
-        DictationBridge.setAwaitingCommandID(nil)
-        XCTAssertNil(DictationBridge.awaitingCommandID())
     }
 
     func testResultRoundTripAndClear() {
