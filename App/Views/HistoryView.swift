@@ -99,7 +99,10 @@ struct HistoryView: View {
         .font(.footnote.weight(.medium))
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(isOn ? Color.appAccent : Color(.tertiarySystemFill), in: Capsule())
+        .background(
+            isOn ? AnyShapeStyle(LinearGradient.appAccentFill) : AnyShapeStyle(Color(.tertiarySystemFill)),
+            in: Capsule()
+        )
         .foregroundStyle(isOn ? .white : .primary)
     }
 

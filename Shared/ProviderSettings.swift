@@ -50,6 +50,9 @@ struct ProviderSettings: Codable, Equatable, Sendable {
     static let deepseekModels = ["deepseek-v4-flash", "deepseek-v4-pro"]
 
     var selectedStyleID: String = Style.light.id
+    /// The template to return to when the keyboard's Dictate/Translate toggle
+    /// leaves translate mode — the last non-translate selection.
+    var lastDictateStyleID: String = Style.light.id
     var targetLanguage: String = "English"
 
     /// Keyboard mic idle-timeout, in minutes; 0 means never. Measured from
@@ -81,6 +84,7 @@ struct ProviderSettings: Codable, Equatable, Sendable {
         anthropicModel = try c.decodeIfPresent(String.self, forKey: .anthropicModel) ?? defaults.anthropicModel
         geminiModel = try c.decodeIfPresent(String.self, forKey: .geminiModel) ?? defaults.geminiModel
         selectedStyleID = try c.decodeIfPresent(String.self, forKey: .selectedStyleID) ?? defaults.selectedStyleID
+        lastDictateStyleID = try c.decodeIfPresent(String.self, forKey: .lastDictateStyleID) ?? defaults.lastDictateStyleID
         targetLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? defaults.targetLanguage
         sessionAutoEndMinutes = try c.decodeIfPresent(Int.self, forKey: .sessionAutoEndMinutes) ?? defaults.sessionAutoEndMinutes
     }

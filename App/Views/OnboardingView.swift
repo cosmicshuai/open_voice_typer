@@ -18,7 +18,17 @@ struct OnboardingView: View {
         }
         .tabViewStyle(.page)
         .indexViewStyle(.page(backgroundDisplayMode: .always))
-        .background(Color(.systemGroupedBackground))
+        .background {
+            ZStack {
+                Color(.systemGroupedBackground)
+                LinearGradient(
+                    colors: [Color.appAccent.opacity(0.14), .clear],
+                    startPoint: .top,
+                    endPoint: .center
+                )
+            }
+            .ignoresSafeArea()
+        }
         .interactiveDismissDisabled()
     }
 
@@ -32,7 +42,7 @@ struct OnboardingView: View {
             WaveformGlyph()
                 .padding(.top, 40)
             Text("Speak. It types.")
-                .font(.title.bold())
+                .font(.largeTitle.bold())
             Text("Dictate into any app and get clean, polished text — using your own AI keys, stored only on this device.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -76,8 +86,11 @@ struct OnboardingView: View {
             }
         ) {
             Image(systemName: "mic.badge.plus")
-                .font(.system(size: 52))
-                .foregroundStyle(Color.appAccent)
+                .font(.system(size: 44))
+                .foregroundStyle(.white)
+                .frame(width: 92, height: 92)
+                .background(LinearGradient.appAccentFill, in: Circle())
+                .shadow(color: Color.appAccent.opacity(0.35), radius: 16, y: 6)
                 .padding(.top, 28)
             Text("Recording happens here")
                 .font(.title.bold())
@@ -211,7 +224,7 @@ private struct WaveformGlyph: View {
         HStack(alignment: .bottom, spacing: 5) {
             ForEach(heights.indices, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 3.5)
-                    .fill(Color.appAccent)
+                    .fill(LinearGradient.appAccentFill)
                     .frame(width: 7, height: heights[index])
                     .scaleEffect(y: animating ? 1 : 0.55, anchor: .bottom)
                     .animation(

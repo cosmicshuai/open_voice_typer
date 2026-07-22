@@ -1,12 +1,13 @@
 import SwiftUI
 
 /// The keyboard's dictation surface, laid out like Typeless: brand row on
-/// top (name + style capsule), a monochrome "tap to speak" pill in the
-/// middle, and utility keys (globe / undo / space / delete / return) below.
-/// All colors are semantic so the panel adapts to the host app's light or
-/// dark keyboard appearance.
+/// top (mark + Dictate/Translate toggle + context capsule), a monochrome
+/// "tap to speak" pill in the middle, and utility keys (globe / undo /
+/// space / delete / return) below. All colors are semantic so the panel
+/// adapts to the host app's light or dark keyboard appearance.
 struct VoicePanelView: View {
     @Bindable var model: VoicePanelModel
+    @Namespace private var modeHighlight
 
     var body: some View {
         VStack(spacing: 8) {
@@ -26,19 +27,75 @@ struct VoicePanelView: View {
     // MARK: Brand row
 
     private var brandRow: some View {
-        HStack {
-            HStack(spacing: 5) {
-                Image(systemName: "waveform")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(Color.appAccent)
-                Text("Voice Typer")
-                    .font(.footnote.weight(.semibold))
+        HStack(spacing: 8) {
+            Image(systemName: "waveform")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Color.appAccent)
+                .accessibilityLabel("Voice Typer")
+
+            Spacer(minLength: 4)
+
+            modeToggle
+
+            Spacer(minLength: 4)
+
+            trailingControl
+        }
+    }
+
+    /// Dictate | Translate, with a gradient thumb that slides between them.
+    private var modeToggle: some View {
+        HStack(spacing: 2) {
+            modeSegment("Dictate", mode: .dictate)
+            modeSegment("Translate", mode: .translate)
+        }
+        .padding(3)
+        .background(.quaternary, in: Capsule())
+        .disabled(!model.canDictate)
+    }
+
+    private func modeSegment(_ label: String, mode: VoicePanelModel.Mode) -> some View {
+        let isOn = model.mode == mode
+        return Button {
+            withAnimation(.spring(duration: 0.3)) {
+                model.setMode(mode)
             }
+        } label: {
+            Text(label)
+                .font(.footnote.weight(isOn ? .semibold : .medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background {
+                    if isOn {
+                        Capsule()
+                            .fill(LinearGradient.appAccentFill)
+                            .matchedGeometryEffect(id: "thumb", in: modeHighlight)
+                    }
+                }
+                .foregroundStyle(isOn ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
 
-            Spacer()
-
+    /// Dictate mode: the template picker. Translate mode: where the words
+    /// will land (target language is configured in the app's Settings).
+    @ViewBuilder
+    private var trailingControl: some View {
+        if model.mode == .translate {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.right")
+                    .font(.caption2.weight(.semibold))
+                Text(model.targetLanguage)
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(Color.appAccent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.appAccent.opacity(0.14), in: Capsule())
+        } else {
             Menu {
-                ForEach(model.styles) { style in
+                ForEach(model.dictateStyles) { style in
                     Button {
                         model.selectedStyleID = style.id
                     } label: {
@@ -53,6 +110,7 @@ struct VoicePanelView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "wand.and.stars")
                     Text(model.selectedStyleName)
+                        .lineLimit(1)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2)
                 }
@@ -95,10 +153,20 @@ struct VoicePanelView: View {
                 } label: {
                     ZStack {
                         Capsule()
-                            .fill(model.phase == .recording ? Color.red : Color.primary)
+                            .fill(
+                                model.phase == .recording
+                                    ? AnyShapeStyle(LinearGradient.recordingFill)
+                                    : AnyShapeStyle(Color.primary)
+                            )
                             .frame(width: 168, height: 56)
                             .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.12 : 1)
                             .animation(.easeOut(duration: 0.12), value: model.audioLevel)
+                            .shadow(
+                                color: model.phase == .recording
+                                    ? Color.red.opacity(0.35)
+                                    : Color.black.opacity(0.12),
+                                radius: 10, y: 4
+                            )
                         if model.phase == .processing {
                             ProgressView()
                                 .tint(Color(uiColor: .systemBackground))
@@ -110,6 +178,7 @@ struct VoicePanelView: View {
                                         ? Color.white
                                         : Color(uiColor: .systemBackground)
                                 )
+                                .contentTransition(.symbolEffect(.replace))
                         }
                     }
                 }
