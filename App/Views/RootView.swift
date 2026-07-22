@@ -19,6 +19,7 @@ struct RootView: View {
             .onAppear {
                 if CommandLine.arguments.contains("--reset-onboarding") {
                     hasCompletedOnboarding = false
+                    UserDefaults.standard.set(0, forKey: OnboardingView.pageKey)
                 }
                 if CommandLine.arguments.contains("--skip-onboarding") {
                     hasCompletedOnboarding = true

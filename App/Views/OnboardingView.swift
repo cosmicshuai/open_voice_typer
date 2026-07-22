@@ -5,8 +5,13 @@ import SwiftUI
 /// engine choice. Front-loads the two things the product can't work without
 /// and makes "no API key yet" a non-blocker by defaulting to on-device speech.
 struct OnboardingView: View {
+    /// UserDefaults key for the current page, so progress survives the app
+    /// being purged while the user is in Settings (the "Open Settings" step
+    /// leaves the app, and iOS often reclaims it before they return).
+    static let pageKey = "onboarding.page"
+
     @Binding var isPresented: Bool
-    @State private var page = 0
+    @AppStorage(OnboardingView.pageKey) private var page = 0
     @State private var cloudSelected = false
 
     var body: some View {
@@ -180,6 +185,7 @@ struct OnboardingView: View {
         var settings = SettingsStore.load()
         settings.asrBackend = cloudSelected ? .openAICompatible : .apple
         SettingsStore.save(settings)
+        page = 0 // reset so a future re-onboarding starts from the beginning
         isPresented = false
     }
 }
