@@ -130,15 +130,15 @@ struct ConfigurationView: View {
 
     private var sessionSection: some View {
         Section {
-            Picker("Auto-end after", selection: $settings.sessionAutoEndMinutes) {
+            Picker("Turn off after", selection: $settings.sessionAutoEndMinutes) {
                 ForEach(ProviderSettings.autoEndChoices, id: \.minutes) { choice in
                     Text(choice.label).tag(choice.minutes)
                 }
             }
         } header: {
-            Text("Keyboard session")
+            Text("Microphone")
         } footer: {
-            Text("A running session keeps the microphone active so the keyboard can dictate. Auto-ending limits battery use if you forget to stop it.")
+            Text("The app keeps the microphone ready in the background so the keyboard can dictate in other apps (you'll see the orange mic indicator). Turning it off after a while saves battery — opening the app turns it back on.")
         }
     }
 

@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import SwiftData
 import UIKit
@@ -19,20 +20,45 @@ final class SessionController {
 
     let recorder = AudioRecorder()
 
+    /// UI-facing mic level for the in-app dictation button (the bridge gets
+    /// its levels separately, only during keyboard-initiated captures).
+    var onUILevel: ((Float) -> Void)?
+
     private var heartbeatTimer: Timer?
     private var autoEndTimer: Timer?
     private var commandToken: DarwinNotifier.ObservationToken?
+    private var interruptionObserver: (any NSObjectProtocol)?
     private var activeCommand: KeyboardCommand?
     private var lastLevelPublish: Date = .distantPast
+    /// Ids already executed — the command queue is append-only (the keyboard
+    /// owns the slot), so replay protection lives here, not in clearing.
+    private var handledCommandIDs: [UUID] = []
+    /// Commands older than this are leftovers from a dead keyboard/app
+    /// lifetime and must not fire a surprise recording.
+    private static let commandMaxAge: TimeInterval = 20
 
     private init() {
         modelContainer = try! ModelContainer(for: TranscriptRecord.self)
         recorder.onLevel = { [weak self] level in
-            MainActor.assumeIsolated { self?.publishLevel(level) }
+            MainActor.assumeIsolated {
+                self?.publishLevel(level)
+                self?.onUILevel?(level)
+            }
         }
     }
 
     // MARK: Session lifecycle
+
+    /// Starts a session without user interaction when possible. Called on
+    /// app foreground so opening the app is all the setup a dictation needs
+    /// (Typeless-style); never prompts for permission — the first manual
+    /// Start does that.
+    func autoStartIfPossible() async {
+        guard !isActive,
+              AVAudioApplication.shared.recordPermission == .granted
+        else { return }
+        await start()
+    }
 
     func start() async {
         guard !isActive else { return }
@@ -52,7 +78,18 @@ final class SessionController {
         lastError = nil
 
         commandToken = DarwinNotifier.observe(.commandPosted) {
-            Task { @MainActor in SessionController.shared.handlePendingCommand() }
+            Task { @MainActor in SessionController.shared.handlePendingCommands() }
+        }
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            let ended = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
+                .flatMap(AVAudioSession.InterruptionType.init) == .ended
+            Task { @MainActor in
+                if ended { SessionController.shared.recoverOrStop() }
+            }
         }
 
         beat()
@@ -72,7 +109,7 @@ final class SessionController {
 
         DictationBridge.publish(PipelineState(phase: .idle))
         // Catch a command the keyboard may have queued while we were starting.
-        handlePendingCommand()
+        handlePendingCommands()
     }
 
     func stop() {
@@ -82,6 +119,10 @@ final class SessionController {
         autoEndTimer?.invalidate()
         autoEndTimer = nil
         commandToken = nil
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        interruptionObserver = nil
         recorder.stopEngine()
         isActive = false
         startedAt = nil
@@ -90,17 +131,42 @@ final class SessionController {
         DictationBridge.publish(PipelineState(phase: .idle))
     }
 
+    /// The heartbeat doubles as an engine watchdog: a heartbeat must never be
+    /// published over a dead engine, or the keyboard would happily dictate
+    /// into silence after an interruption.
     private func beat() {
-        guard let startedAt else { return }
-        DictationBridge.publish(SessionHeartbeat(startedAt: startedAt, lastBeatAt: .now))
+        guard startedAt != nil else { return }
+        if !recorder.isEngineHealthy {
+            recoverOrStop()
+            guard isActive, recorder.isEngineHealthy else { return }
+        }
+        DictationBridge.publish(SessionHeartbeat(startedAt: startedAt ?? .now, lastBeatAt: .now))
+    }
+
+    private func recoverOrStop() {
+        guard isActive, !recorder.isEngineHealthy else { return }
+        do {
+            try recorder.recoverEngine()
+        } catch {
+            lastError = "Microphone session was interrupted and could not resume."
+            stop()
+        }
     }
 
     // MARK: Command handling
 
-    private func handlePendingCommand() {
-        guard isActive, let command = DictationBridge.pendingCommand() else { return }
-        DictationBridge.clearCommand()
+    private func handlePendingCommands() {
+        guard isActive else { return }
+        for command in DictationBridge.commandQueue() {
+            guard !handledCommandIDs.contains(command.id) else { continue }
+            handledCommandIDs.append(command.id)
+            if handledCommandIDs.count > 64 { handledCommandIDs.removeFirst(32) }
+            guard Date.now.timeIntervalSince(command.issuedAt) < Self.commandMaxAge else { continue }
+            execute(command)
+        }
+    }
 
+    private func execute(_ command: KeyboardCommand) {
         switch command.kind {
         case .startDictation:
             guard activeCommand == nil else { return }

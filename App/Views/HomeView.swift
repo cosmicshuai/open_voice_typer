@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// In-app dictation: record, transcribe, polish, copy. This screen makes the
-/// app usable standalone before the keyboard extension lands.
+/// In-app dictation: record, transcribe, polish, copy. There is no
+/// user-facing "session" — opening the app keeps the microphone ready in
+/// the background (that's what powers the keyboard in other apps), and the
+/// mic button here rides the same engine.
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var model = HomeViewModel()
@@ -10,23 +12,15 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                sessionCard
                 stylePicker
                 Spacer()
-                if session.isActive {
-                    Label("Session running — dictate from the Voice Typer keyboard in any app.", systemImage: "keyboard.badge.ellipsis")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                } else {
-                    recordButton
-                    Text(model.statusText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                recordButton
+                Text(model.statusText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 resultSection
+                keyboardFooter
             }
             .padding()
             .navigationTitle("Open Voice Typer")
@@ -39,37 +33,6 @@ struct HomeView: View {
                 Text(model.errorMessage)
             }
         }
-    }
-
-    private var sessionCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label("Keyboard Session", systemImage: "keyboard.badge.waveform")
-                    .font(.headline)
-                Spacer()
-                Button(session.isActive ? "End" : "Start") {
-                    if session.isActive {
-                        session.stop()
-                    } else {
-                        Task { await session.start() }
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(session.isActive ? .red : .appAccent)
-            }
-            Text(session.isActive
-                 ? "Microphone session is live. The Voice Typer keyboard can now dictate anywhere. Ending the session or force-quitting this app stops it."
-                 : "Start a session to dictate from the Voice Typer keyboard in other apps. The mic indicator stays on while a session runs.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if let error = session.lastError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        }
-        .padding()
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var stylePicker: some View {
@@ -136,6 +99,24 @@ struct HomeView: View {
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
         }
     }
+
+    /// One quiet line about the keyboard, in place of the old session card.
+    private var keyboardFooter: some View {
+        Group {
+            if let error = session.lastError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+            } else if session.isActive {
+                Label("Voice keyboard ready — dictate in any app.", systemImage: "keyboard.badge.waveform")
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("Microphone is off — it turns on whenever this app opens.", systemImage: "mic.slash")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.footnote)
+        .multilineTextAlignment(.center)
+    }
 }
 
 @MainActor
@@ -167,11 +148,12 @@ final class HomeViewModel {
         return "Tap to dictate"
     }
 
-    private let recorder = AudioRecorder()
+    private let session = SessionController.shared
 
     init() {
-        recorder.onLevel = { [weak self] level in
-            MainActor.assumeIsolated { self?.audioLevel = level }
+        session.onUILevel = { [weak self] level in
+            guard let self else { return }
+            audioLevel = isRecording ? level : 0
         }
     }
 
@@ -181,25 +163,27 @@ final class HomeViewModel {
 
     private func startRecording() {
         Task {
-            guard await AudioRecorder.requestPermission() else {
-                present(AudioRecorderError.microphonePermissionDenied)
+            // In-app dictation shares the background engine that serves the
+            // keyboard; first ever tap prompts for mic permission via start().
+            if !session.isActive {
+                await session.start()
+            }
+            guard session.isActive else {
+                errorMessage = session.lastError
+                    ?? AudioRecorderError.microphonePermissionDenied.localizedDescription
+                showError = true
                 return
             }
-            do {
-                try recorder.startEngine()
-                recorder.beginCapture()
-                isRecording = true
-                rawText = ""
-                polishedText = ""
-            } catch {
-                present(error)
-            }
+            session.recorder.beginCapture()
+            isRecording = true
+            rawText = ""
+            polishedText = ""
         }
     }
 
     private func finishRecording() {
-        let wav = recorder.endCapture()
-        recorder.stopEngine()
+        // The engine keeps running for the keyboard; only the capture ends.
+        let wav = session.recorder.endCapture()
         isRecording = false
         isTranscribing = true
 
@@ -220,14 +204,10 @@ final class HomeViewModel {
                     audioSeconds: outcome.audioSeconds
                 ))
             } catch {
-                present(error)
+                errorMessage = error.localizedDescription
+                showError = true
             }
         }
-    }
-
-    private func present(_ error: Error) {
-        errorMessage = error.localizedDescription
-        showError = true
     }
 }
 

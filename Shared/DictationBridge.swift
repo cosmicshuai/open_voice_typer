@@ -8,10 +8,11 @@ import Foundation
 /// without it) — `isAvailable` is how callers detect that.
 enum DictationBridge {
     private enum Key {
-        static let command = "bridge.command"
+        static let commands = "bridge.commands"
         static let state = "bridge.state"
         static let result = "bridge.result"
         static let heartbeat = "bridge.sessionHeartbeat"
+        static let awaiting = "bridge.keyboardAwaiting"
     }
 
     /// False when the App Group container can't be opened (e.g. the keyboard
@@ -22,18 +23,23 @@ enum DictationBridge {
 
     // MARK: Keyboard -> App
 
+    /// Commands are an append-only queue (only the keyboard writes it) so a
+    /// quick start→stop can never overwrite itself the way a single slot
+    /// could. The app dedupes by command id instead of clearing the slot —
+    /// clearing from the reader side would race the keyboard's appends.
     static func send(_ command: KeyboardCommand) {
-        write(command, key: Key.command)
+        let queue = (commandQueue() + [command]).suffix(8)
+        write(Array(queue), key: Key.commands)
         DarwinNotifier.post(.commandPosted)
     }
 
-    static func pendingCommand() -> KeyboardCommand? {
-        read(KeyboardCommand.self, key: Key.command)
+    static func commandQueue() -> [KeyboardCommand] {
+        read([KeyboardCommand].self, key: Key.commands) ?? []
     }
 
-    /// The app clears a command once handled so it is never replayed.
-    static func clearCommand() {
-        AppGroup.defaults?.removeObject(forKey: Key.command)
+    /// Test/setup helper; production readers dedupe rather than clear.
+    static func clearCommands() {
+        AppGroup.defaults?.removeObject(forKey: Key.commands)
     }
 
     // MARK: App -> Keyboard
@@ -59,6 +65,23 @@ enum DictationBridge {
     /// The keyboard clears a result once inserted so it is never replayed.
     static func clearResult() {
         AppGroup.defaults?.removeObject(forKey: Key.result)
+    }
+
+    // MARK: Keyboard in-flight dictation
+
+    /// The start-command id the keyboard is waiting on, persisted so a
+    /// dictation still processing when the keyboard is dismissed can be
+    /// picked up and inserted when the keyboard reappears.
+    static func setAwaitingCommandID(_ id: UUID?) {
+        if let id {
+            write(id, key: Key.awaiting)
+        } else {
+            AppGroup.defaults?.removeObject(forKey: Key.awaiting)
+        }
+    }
+
+    static func awaitingCommandID() -> UUID? {
+        read(UUID.self, key: Key.awaiting)
     }
 
     // MARK: Session heartbeat

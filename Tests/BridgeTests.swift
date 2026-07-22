@@ -6,24 +6,53 @@ import XCTest
 final class BridgeTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        DictationBridge.clearCommand()
+        DictationBridge.clearCommands()
         DictationBridge.clearResult()
+        DictationBridge.setAwaitingCommandID(nil)
     }
 
     func testBridgeIsAvailableInHostApp() {
         XCTAssertTrue(DictationBridge.isAvailable, "App Group container must be reachable from the app")
     }
 
-    func testCommandRoundTripAndClear() {
+    func testCommandRoundTrip() {
         let command = KeyboardCommand(kind: .startDictation, styleID: Style.light.id)
         DictationBridge.send(command)
 
-        let pending = DictationBridge.pendingCommand()
+        let pending = DictationBridge.commandQueue().first
         XCTAssertEqual(pending?.id, command.id)
         XCTAssertEqual(pending?.kind, .startDictation)
 
-        DictationBridge.clearCommand()
-        XCTAssertNil(DictationBridge.pendingCommand(), "handled commands must not replay")
+        DictationBridge.clearCommands()
+        XCTAssertTrue(DictationBridge.commandQueue().isEmpty)
+    }
+
+    /// The regression that made dictation hang: a fast start→stop must keep
+    /// BOTH commands, in order — a single-slot mailbox lost the start.
+    func testFastStartStopKeepsBothCommandsInOrder() {
+        let start = KeyboardCommand(kind: .startDictation, styleID: Style.light.id)
+        let stop = KeyboardCommand(kind: .stopDictation, styleID: Style.light.id)
+        DictationBridge.send(start)
+        DictationBridge.send(stop)
+
+        let queue = DictationBridge.commandQueue()
+        XCTAssertEqual(queue.map(\.id), [start.id, stop.id])
+        XCTAssertEqual(queue.map(\.kind), [.startDictation, .stopDictation])
+    }
+
+    func testCommandQueueIsBounded() {
+        for _ in 0..<20 {
+            DictationBridge.send(KeyboardCommand(kind: .cancelDictation, styleID: Style.raw.id))
+        }
+        XCTAssertLessThanOrEqual(DictationBridge.commandQueue().count, 8)
+    }
+
+    func testAwaitingCommandIDPersistsAcrossKeyboardLifetimes() {
+        let id = UUID()
+        DictationBridge.setAwaitingCommandID(id)
+        XCTAssertEqual(DictationBridge.awaitingCommandID(), id)
+        DictationBridge.setAwaitingCommandID(nil)
+        XCTAssertNil(DictationBridge.awaitingCommandID())
     }
 
     func testResultRoundTripAndClear() {
@@ -67,7 +96,7 @@ final class BridgeTests: XCTestCase {
         DictationBridge.send(KeyboardCommand(kind: .startDictation, styleID: Style.raw.id))
         wait(for: [fired], timeout: 5)
         _ = token // keep observer alive until delivery
-        DictationBridge.clearCommand()
+        DictationBridge.clearCommands()
     }
 
     func testErrorResultCarriesMessage() {

@@ -81,11 +81,11 @@ struct OnboardingView: View {
                 .padding(.top, 28)
             Text("Recording happens here")
                 .font(.title.bold())
-            Text("iOS doesn't let keyboards use the microphone — so this app records for it. Start a session here, then dictate anywhere.")
+            Text("iOS doesn't let keyboards use the microphone — so this app records for it. Just open the app once, then dictate anywhere.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 24)
-            infoCard("While a session runs you'll see the orange mic indicator. End it anytime, or let it auto-end after 15 minutes.")
+            infoCard("While the mic stays ready you'll see the orange indicator. It switches off after 15 minutes (adjustable in Settings); opening the app turns it back on.")
         }
     }
 
