@@ -59,7 +59,7 @@ struct HomeView: View {
             }
             Text(session.isActive
                  ? "Microphone session is live. The Voice Typer keyboard can now dictate anywhere. Ending the session or force-quitting this app stops it."
-                 : "Start a session to dictate from the Voice Typer keyboard in other apps. The mic indicator stays on while a session runs.")
+                 : "Sessions start automatically whenever you open this app (once mic access is granted). The mic indicator stays on while one runs.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let error = session.lastError {

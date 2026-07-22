@@ -24,6 +24,13 @@ final class AudioRecorder: @unchecked Sendable {
 
     private(set) var isEngineRunning = false
 
+    /// False when an audio-session interruption (call, Siri, another app
+    /// grabbing the mic) has stopped the engine underneath us while a
+    /// session logically remains open.
+    var isEngineHealthy: Bool {
+        isEngineRunning && engine.isRunning
+    }
+
     var isCapturing: Bool {
         lock.withLock { capturing }
     }
@@ -59,6 +66,15 @@ final class AudioRecorder: @unchecked Sendable {
         engine.prepare()
         try engine.start()
         isEngineRunning = true
+    }
+
+    /// Restarts a running-but-interrupted engine (the tap survives; only the
+    /// session activation and engine need a kick). No-op when healthy.
+    func recoverEngine() throws {
+        guard isEngineRunning, !engine.isRunning else { return }
+        try AVAudioSession.sharedInstance().setActive(true)
+        engine.prepare()
+        try engine.start()
     }
 
     func stopEngine() {

@@ -76,19 +76,25 @@ struct VoicePanelView: View {
         case .noSession:
             guidance(
                 icon: "iphone.app.switcher",
-                title: "Start a session",
-                message: "Open Open Voice Typer and start a keyboard session, then come back."
+                title: "Open Open Voice Typer",
+                message: "Opening the app starts the mic session automatically — then switch back here and speak."
             )
         case .idle, .recording, .processing, .error:
-            VStack(spacing: 6) {
+            VStack(spacing: 10) {
+                Text(model.statusText)
+                    .font(model.phase.isError ? .caption : .footnote)
+                    .foregroundStyle(model.phase.isError ? .red : .secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+
                 Button {
                     model.toggleDictation()
                 } label: {
                     ZStack {
-                        Circle()
+                        Capsule()
                             .fill(model.phase == .recording ? Color.red : Color.appAccent)
-                            .frame(width: 64, height: 64)
-                            .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.3 : 1)
+                            .frame(width: 168, height: 56)
+                            .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.12 : 1)
                             .animation(.easeOut(duration: 0.12), value: model.audioLevel)
                         if model.phase == .processing {
                             ProgressView()
@@ -102,12 +108,7 @@ struct VoicePanelView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(model.phase == .processing)
-
-                Text(model.statusText)
-                    .font(.caption)
-                    .foregroundStyle(model.phase.isError ? .red : .secondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
+                .accessibilityLabel(model.phase == .recording ? "Stop and insert" : "Tap to speak")
             }
         }
     }

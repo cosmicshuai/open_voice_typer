@@ -21,6 +21,13 @@ final class VoicePanelModel {
         }
     }
 
+    /// The app must acknowledge a start command (by publishing a recording
+    /// state) within this window, or the tap is declared failed instead of
+    /// letting the user talk into a dead mic.
+    static let startAckTimeout: TimeInterval = 3
+    /// Ceiling for ASR + polish; beyond it the keyboard stops waiting.
+    static let resultTimeout: TimeInterval = 60
+
     var phase: Phase = .idle
     var audioLevel: Float = 0
     var styles: [Style] = []
@@ -37,8 +44,14 @@ final class VoicePanelModel {
     var insertTextHandler: (String) -> Void = { _ in }
     var deleteBackwardHandler: () -> Void = {}
 
-    /// The start-command id of the dictation we're waiting on.
-    private var awaitingCommandID: UUID?
+    /// The start-command id of the dictation we're waiting on. Mirrored into
+    /// the bridge so a result that lands while the keyboard is dismissed is
+    /// inserted when it reappears instead of being lost.
+    private var awaitingCommandID: UUID? {
+        didSet { DictationBridge.setAwaitingCommandID(awaitingCommandID) }
+    }
+    private var startAcknowledged = false
+    private var timeoutTask: Task<Void, Never>?
     private var lastInsertedText = ""
     private var tokens: [DarwinNotifier.ObservationToken] = []
     private var pollTimer: Timer?
@@ -67,7 +80,7 @@ final class VoicePanelModel {
         case .recording: "Listening… tap to finish"
         case .processing: "Working…"
         case .error(let message): message
-        default: "Tap to dictate"
+        default: "Tap to speak"
         }
     }
 
@@ -100,15 +113,33 @@ final class VoicePanelModel {
                 self?.consumeResult()
             }
         }
+
+        // Resume a dictation that was still processing when the keyboard was
+        // last dismissed — its result may already be waiting, or still coming.
+        if let pending = DictationBridge.awaitingCommandID() {
+            awaitingCommandID = pending
+            phase = .processing
+            scheduleTimeout(after: Self.resultTimeout, ifStillAwaiting: pending) { [weak self] in
+                self?.fail("Timed out waiting for the result. Try again.")
+            }
+        }
+
+        // Consume any waiting result BEFORE the liveness check — the session
+        // may have ended right after publishing it, and the text still counts.
+        consumeResult()
         refreshSessionState()
     }
 
     func deactivate() {
-        // A dictation in flight when the keyboard closes is abandoned; tell
-        // the app to stop capturing.
+        // A recording in flight when the keyboard closes is abandoned; tell
+        // the app to stop capturing. A *processing* dictation stays awaited
+        // (persisted) and is picked up on the next activate.
         if phase == .recording {
             DictationBridge.send(KeyboardCommand(kind: .cancelDictation, styleID: selectedStyleID))
+            awaitingCommandID = nil
         }
+        timeoutTask?.cancel()
+        timeoutTask = nil
         tokens = []
         pollTimer?.invalidate()
         pollTimer = nil
@@ -121,15 +152,47 @@ final class VoicePanelModel {
         case .idle, .error:
             let command = KeyboardCommand(kind: .startDictation, styleID: selectedStyleID)
             awaitingCommandID = command.id
+            startAcknowledged = false
             DictationBridge.send(command)
             phase = .recording
             audioLevel = 0
+            scheduleTimeout(after: Self.startAckTimeout, ifStillAwaiting: command.id) { [weak self] in
+                guard let self, !self.startAcknowledged, self.phase == .recording else { return }
+                DictationBridge.send(KeyboardCommand(kind: .cancelDictation, styleID: self.selectedStyleID))
+                self.fail("The app didn't start recording. Open Open Voice Typer once, then try again.")
+            }
         case .recording:
+            let id = awaitingCommandID
             DictationBridge.send(KeyboardCommand(kind: .stopDictation, styleID: selectedStyleID))
             phase = .processing
+            scheduleTimeout(after: Self.resultTimeout, ifStillAwaiting: id) { [weak self] in
+                self?.fail("Timed out waiting for the result. Try again.")
+            }
         default:
             break
         }
+    }
+
+    /// Arms the single failure timer for the dictation identified by `id`;
+    /// any state advance re-arms or cancels it.
+    private func scheduleTimeout(
+        after seconds: TimeInterval,
+        ifStillAwaiting id: UUID?,
+        onTimeout: @escaping @MainActor () -> Void
+    ) {
+        timeoutTask?.cancel()
+        timeoutTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled, self.awaitingCommandID == id, id != nil else { return }
+            onTimeout()
+        }
+    }
+
+    private func fail(_ message: String) {
+        awaitingCommandID = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        phase = .error(message)
     }
 
     private func consumeResult() {
@@ -138,6 +201,8 @@ final class VoicePanelModel {
         else { return }
         DictationBridge.clearResult()
         awaitingCommandID = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
 
         if let message = result.errorMessage {
             phase = .error(message)
@@ -148,7 +213,9 @@ final class VoicePanelModel {
 
     private func consumeState() {
         guard let state = DictationBridge.currentState() else { return }
-        if phase == .recording, state.phase == .recording, state.commandID == awaitingCommandID {
+        guard state.commandID == awaitingCommandID, awaitingCommandID != nil else { return }
+        if phase == .recording, state.phase == .recording {
+            startAcknowledged = true
             audioLevel = state.audioLevel
         }
     }
@@ -167,6 +234,7 @@ final class VoicePanelModel {
         case .recording where !alive, .processing where !alive:
             // The app died mid-dictation.
             awaitingCommandID = nil
+            timeoutTask?.cancel()
             phase = .noSession
         default:
             break
