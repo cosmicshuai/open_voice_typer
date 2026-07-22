@@ -27,9 +27,9 @@ final class KeyboardDictationUITests: XCTestCase {
         app.launchEnvironment["OVT_FAKE_PIPELINE"] = dictatedText
         app.launch()
         XCTAssertTrue(
-            app.staticTexts["Session running — dictate from the Voice Typer keyboard in any app."]
+            app.staticTexts["Voice keyboard ready — dictate in any app."]
                 .waitForExistence(timeout: 20),
-            "session did not auto-start — is mic permission pre-granted (simctl privacy)?"
+            "mic did not come up on launch — is permission pre-granted (simctl privacy)?"
         )
 
         // Over to a different app with a text field.

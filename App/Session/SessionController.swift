@@ -20,6 +20,10 @@ final class SessionController {
 
     let recorder = AudioRecorder()
 
+    /// UI-facing mic level for the in-app dictation button (the bridge gets
+    /// its levels separately, only during keyboard-initiated captures).
+    var onUILevel: ((Float) -> Void)?
+
     private var heartbeatTimer: Timer?
     private var autoEndTimer: Timer?
     private var commandToken: DarwinNotifier.ObservationToken?
@@ -36,7 +40,10 @@ final class SessionController {
     private init() {
         modelContainer = try! ModelContainer(for: TranscriptRecord.self)
         recorder.onLevel = { [weak self] level in
-            MainActor.assumeIsolated { self?.publishLevel(level) }
+            MainActor.assumeIsolated {
+                self?.publishLevel(level)
+                self?.onUILevel?(level)
+            }
         }
     }
 
