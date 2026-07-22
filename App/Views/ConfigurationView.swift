@@ -91,14 +91,17 @@ struct ConfigurationView: View {
                         Button(model) { settings.deepseekModel = model }
                     }
                 } label: {
-                    LabeledContent("Model") {
+                    LabeledContent("Preset") {
                         HStack(spacing: 4) {
-                            Text(settings.deepseekModel)
+                            Text("Choose…")
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(.caption2)
                         }
                         .foregroundStyle(Color.appAccent)
                     }
+                }
+                LabeledContent("Model") {
+                    plainField("deepseek-v4-flash", text: $settings.deepseekModel)
                 }
                 keyRow("API Key", key: .polishDeepSeekKey,
                        target: .openAICompatible(baseURL: ProviderSettings.deepseekBaseURL),
