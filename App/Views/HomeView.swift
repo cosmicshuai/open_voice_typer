@@ -107,7 +107,7 @@ struct HomeView: View {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
             } else if session.isActive {
-                Label("Voice keyboard ready — dictate in any app.", systemImage: "keyboard.badge.waveform")
+                Label("Voice keyboard ready — dictate in any app.", systemImage: "keyboard")
                     .foregroundStyle(.secondary)
             } else {
                 Label("Microphone is off — it turns on whenever this app opens.", systemImage: "mic.slash")
