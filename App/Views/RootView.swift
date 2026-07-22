@@ -20,6 +20,9 @@ struct RootView: View {
                 if CommandLine.arguments.contains("--reset-onboarding") {
                     hasCompletedOnboarding = false
                 }
+                if CommandLine.arguments.contains("--skip-onboarding") {
+                    hasCompletedOnboarding = true
+                }
                 showOnboarding = !hasCompletedOnboarding
             }
             .fullScreenCover(isPresented: $showOnboarding, onDismiss: {

@@ -57,7 +57,9 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Speech to text"].waitForExistence(timeout: 5), "settings sections missing")
 
         app.tabBars.buttons["Dictate"].tap()
-        XCTAssertTrue(app.buttons["Start"].waitForExistence(timeout: 5), "session card missing")
+        // The session may have auto-started (mic pre-granted), so the card
+        // shows either Start or End.
+        XCTAssertTrue(app.staticTexts["Keyboard Session"].waitForExistence(timeout: 5), "session card missing")
     }
 
     @MainActor

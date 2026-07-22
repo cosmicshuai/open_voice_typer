@@ -37,6 +37,16 @@ struct DictationPipeline: Sendable {
         let hotwords = SharedCatalog.loadDictionary().map(\.term)
         let seconds = Self.audioSeconds(ofWAV: wavData)
 
+        #if DEBUG
+        // UI-test hook: the simulator has no working speech stack and test
+        // runs have no API keys, so E2E tests fake only the provider calls —
+        // recording, the keyboard↔app bridge, and insertion all stay real.
+        if let fake = ProcessInfo.processInfo.environment["OVT_FAKE_PIPELINE"] {
+            try? await Task.sleep(for: .milliseconds(300))
+            return Outcome(rawText: fake, polishedText: fake, engineName: "uitest-fake", audioSeconds: seconds)
+        }
+        #endif
+
         let raw = try await makeASRProvider().transcribe(ASRRequest(
             wavData: wavData,
             language: settings.asrLanguage,
