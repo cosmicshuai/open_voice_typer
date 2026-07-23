@@ -32,6 +32,10 @@ targets:
         NSMicrophoneUsageDescription: Open Voice Typer records audio during a dictation session to transcribe your speech.
         NSSpeechRecognitionUsageDescription: Used for on-device speech recognition when Apple ASR is selected.
         ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLName: com.shuaiwang.openvoicetyper
+            CFBundleURLSchemes:
+              - openvoicetyper
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shuaiwang.openvoicetyper
