@@ -186,20 +186,20 @@ struct VoicePanelView: View {
                     model.toggleDictation()
                 } label: {
                     ZStack {
-                        Capsule()
+                        Circle()
                             .fill(
                                 model.phase == .recording
                                     ? LinearGradient.recordingFill
                                     : LinearGradient.appAccentFill
                             )
                             .overlay(
-                                // A hairline highlight so the pill reads
-                                // dimensional instead of a flat slab.
-                                Capsule()
+                                // A hairline highlight so the button reads
+                                // dimensional instead of a flat disc.
+                                Circle()
                                     .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
                                     .blendMode(.plusLighter)
                             )
-                            .frame(width: 168, height: 56)
+                            .frame(width: 76, height: 76)
                             .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.12 : 1)
                             .animation(.easeOut(duration: 0.12), value: model.audioLevel)
                             .shadow(
