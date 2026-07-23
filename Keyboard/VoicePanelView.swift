@@ -9,9 +9,8 @@ struct VoicePanelView: View {
     @Bindable var model: VoicePanelModel
     @Namespace private var modeHighlight
 
-    /// Punctuation that's awkward to dictate — tuned for coding and Claude
-    /// Code (slash commands, @-mentions, ~paths, flags, bang, code fences).
-    private let quickSymbols = ["/", "@", "~", "-", "_", "!", "#", "`"]
+    /// Punctuation that's awkward to dictate — @-mentions, bang, slash.
+    private let quickSymbols = ["@", "!", "/"]
 
     var body: some View {
         VStack(spacing: 10) {
@@ -245,50 +244,44 @@ struct VoicePanelView: View {
         }
     }
 
-    /// Globe / undo / space / delete / send. Space is a normal key (dictation
-    /// handles most spacing); send is accented since it's the common finish.
+    /// esc / delete / send — send is accented as the common finish. Keyboard
+    /// switching uses the system globe row iOS draws below custom keyboards.
     private var controlRow: some View {
         HStack(spacing: 6) {
-            if model.needsInputModeSwitchKey {
-                utilityButton(systemImage: "globe") { model.onGlobe() }
-                    .accessibilityLabel("Next keyboard")
-            }
-            utilityButton(systemImage: "arrow.uturn.backward") { model.undoLastInsert() }
-                .disabled(!model.canUndo)
-                .accessibilityLabel("Undo last insertion")
             Button {
-                model.insertText(" ")
+                model.insertText("\u{1B}") // ESC — useful in Claude Code / terminals
             } label: {
-                Text("space")
+                Text("esc")
                     .font(.subheadline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
-            utilityButton(systemImage: "delete.left") { model.deleteBackward() }
-                .accessibilityLabel("Delete")
+            .accessibilityLabel("Escape")
+            Button {
+                model.deleteBackward()
+            } label: {
+                Image(systemName: "delete.left")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete")
             Button {
                 model.insertText("\n")
             } label: {
                 Text("send")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 76, height: 40)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
                     .background(LinearGradient.appAccentFill, in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Send")
         }
-    }
-
-    private func utilityButton(systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.subheadline)
-                .frame(width: 42, height: 40)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
     }
 }
