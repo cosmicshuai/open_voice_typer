@@ -25,8 +25,10 @@ final class VoicePanelModel {
     /// state) within this window, or the tap is declared failed instead of
     /// letting the user talk into a dead mic.
     static let startAckTimeout: TimeInterval = 3
-    /// Ceiling for ASR + polish; beyond it the keyboard stops waiting.
-    static let resultTimeout: TimeInterval = 60
+    /// Ceiling for ASR + polish; beyond it the keyboard stops waiting. Sized
+    /// to allow both stages to exhaust their timeout-retry budget (3 attempts
+    /// × 20s each) in the pathological all-timeout case.
+    static let resultTimeout: TimeInterval = 130
     /// A tap-start-to-stop shorter than this is treated as a misclick and
     /// discarded locally — no round trip to the app, nothing to wait for.
     static let minRecordingSeconds: TimeInterval = 0.6
