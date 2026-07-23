@@ -143,10 +143,16 @@ struct ConfigurationView: View {
     }
 
     private var translateSection: some View {
-        Section("Translate template") {
-            LabeledContent("Target language") {
-                plainField("English", text: $settings.targetLanguage)
+        Section {
+            Picker("Target language", selection: $settings.targetLanguage) {
+                ForEach(ProviderSettings.targetLanguages, id: \.self) { language in
+                    Text(language).tag(language)
+                }
             }
+        } header: {
+            Text("Translate template")
+        } footer: {
+            Text("The Translate style rewrites your speech into this language.")
         }
     }
 

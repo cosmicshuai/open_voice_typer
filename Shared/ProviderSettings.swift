@@ -66,6 +66,15 @@ struct ProviderSettings: Codable, Equatable, Sendable {
         ("Never", 0),
     ]
 
+    /// Translate targets the user can choose from — a fixed list so an
+    /// unrecognized / misspelled language can never reach the polish prompt.
+    static let targetLanguages = [
+        "English", "Spanish", "French", "German", "Italian", "Portuguese",
+        "Dutch", "Russian", "Polish", "Turkish", "Arabic", "Hindi",
+        "Chinese (Simplified)", "Chinese (Traditional)", "Japanese", "Korean",
+        "Vietnamese", "Thai", "Indonesian", "Ukrainian",
+    ]
+
     init() {}
 
     /// Every field is optional on decode so settings saved by an older build
@@ -85,7 +94,10 @@ struct ProviderSettings: Codable, Equatable, Sendable {
         geminiModel = try c.decodeIfPresent(String.self, forKey: .geminiModel) ?? defaults.geminiModel
         selectedStyleID = try c.decodeIfPresent(String.self, forKey: .selectedStyleID) ?? defaults.selectedStyleID
         lastDictateStyleID = try c.decodeIfPresent(String.self, forKey: .lastDictateStyleID) ?? defaults.lastDictateStyleID
-        targetLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? defaults.targetLanguage
+        let decodedLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? defaults.targetLanguage
+        // Clamp a language saved by an older build (freeform text) to the
+        // known list so an invalid target never reaches the polish prompt.
+        targetLanguage = Self.targetLanguages.contains(decodedLanguage) ? decodedLanguage : defaults.targetLanguage
         sessionAutoEndMinutes = try c.decodeIfPresent(Int.self, forKey: .sessionAutoEndMinutes) ?? defaults.sessionAutoEndMinutes
     }
 }
