@@ -43,28 +43,28 @@ struct VoicePanelView: View {
         }
     }
 
-    /// Dictate | Translate, with a gradient thumb that slides between them.
+    /// Dictate (waveform) | Translate (dictionary), with a gradient thumb
+    /// that slides between them and the active glyph animating on select.
     private var modeToggle: some View {
         HStack(spacing: 2) {
-            modeSegment("Dictate", mode: .dictate)
-            modeSegment("Translate", mode: .translate)
+            modeSegment("waveform", label: "Dictate", mode: .dictate)
+            modeSegment("character.book.closed", label: "Translate", mode: .translate)
         }
         .padding(3)
         .background(.quaternary, in: Capsule())
         .disabled(!model.canDictate)
     }
 
-    private func modeSegment(_ label: String, mode: VoicePanelModel.Mode) -> some View {
+    private func modeSegment(_ systemImage: String, label: String, mode: VoicePanelModel.Mode) -> some View {
         let isOn = model.mode == mode
         return Button {
             withAnimation(.spring(duration: 0.3)) {
                 model.setMode(mode)
             }
         } label: {
-            Text(label)
-                .font(.footnote.weight(isOn ? .semibold : .medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
+            Image(systemName: systemImage)
+                .font(.footnote.weight(.semibold))
+                .frame(width: 46, height: 28)
                 .background {
                     if isOn {
                         Capsule()
@@ -73,8 +73,11 @@ struct VoicePanelView: View {
                     }
                 }
                 .foregroundStyle(isOn ? .white : .primary)
+                // Animate the glyph whenever this segment becomes active.
+                .symbolEffect(.bounce, value: isOn)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
