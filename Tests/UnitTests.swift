@@ -108,6 +108,39 @@ final class PresetTests: XCTestCase {
     }
 }
 
+final class PolishBackendSpecTests: XCTestCase {
+    func testRegistryHasExactlyOneSpecPerBackend() {
+        XCTAssertEqual(
+            PolishBackendSpec.all.count,
+            ProviderSettings.PolishBackend.allCases.count,
+            "registry must stay exhaustive — one spec per backend"
+        )
+        for backend in ProviderSettings.PolishBackend.allCases {
+            XCTAssertEqual(PolishBackendSpec.for(backend).backend, backend)
+        }
+    }
+
+    func testKeychainKeysAreDistinctPerBackend() {
+        let keys = PolishBackendSpec.all.map(\.keychainKey)
+        XCTAssertEqual(Set(keys).count, keys.count, "each backend needs its own key slot")
+    }
+
+    func testModelKeyPathsResolveToTheRightField() {
+        var settings = ProviderSettings()
+        settings.deepseekModel = "deepseek-v4-pro"
+        settings.anthropicModel = "claude-x"
+        XCTAssertEqual(PolishBackendSpec.for(.deepseek).model(in: settings), "deepseek-v4-pro")
+        XCTAssertEqual(PolishBackendSpec.for(.anthropic).model(in: settings), "claude-x")
+    }
+
+    func testOnlyOpenAICompatibleHasAConfigurableBaseURL() {
+        XCTAssertTrue(PolishBackendSpec.for(.openAICompatible).hasConfigurableBaseURL)
+        XCTAssertFalse(PolishBackendSpec.for(.deepseek).hasConfigurableBaseURL)
+        XCTAssertFalse(PolishBackendSpec.for(.anthropic).hasConfigurableBaseURL)
+        XCTAssertFalse(PolishBackendSpec.for(.gemini).hasConfigurableBaseURL)
+    }
+}
+
 final class SettingsMigrationTests: XCTestCase {
     /// Settings saved before `deepseekModel` (or any later field) existed must
     /// decode intact, not reset to defaults.
