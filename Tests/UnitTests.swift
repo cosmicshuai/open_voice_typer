@@ -118,6 +118,56 @@ final class SettingsMigrationTests: XCTestCase {
     }
 }
 
+final class TimeoutRetryTests: XCTestCase {
+    private actor Counter {
+        private(set) var count = 0
+        func bump() -> Int { count += 1; return count }
+    }
+
+    func testRetriesTimeoutThenSucceeds() async throws {
+        let counter = Counter()
+        let result = try await DictationPipeline.withTimeoutRetry(maxAttempts: 3, timeout: .milliseconds(80)) {
+            let n = await counter.bump()
+            if n < 3 { try await Task.sleep(for: .milliseconds(400)) } // first two time out
+            return "done"
+        }
+        XCTAssertEqual(result, "done")
+        let attempts = await counter.count
+        XCTAssertEqual(attempts, 3, "should have retried twice before succeeding on the third try")
+    }
+
+    func testNonTimeoutErrorFailsImmediately() async {
+        let counter = Counter()
+        do {
+            _ = try await DictationPipeline.withTimeoutRetry(maxAttempts: 3, timeout: .seconds(5)) { () async throws -> String in
+                _ = await counter.bump()
+                throw PolishError.missingAPIKey
+            }
+            XCTFail("a non-timeout error should propagate, not retry")
+        } catch {
+            XCTAssertTrue(error is PolishError)
+        }
+        let attempts = await counter.count
+        XCTAssertEqual(attempts, 1, "a bad-key error must not be retried")
+    }
+
+    func testExhaustsRetriesThenThrowsTimeout() async {
+        let counter = Counter()
+        do {
+            _ = try await DictationPipeline.withTimeoutRetry(maxAttempts: 3, timeout: .milliseconds(60)) { () async throws -> String in
+                _ = await counter.bump()
+                try await Task.sleep(for: .milliseconds(400)) // always times out
+                return "never"
+            }
+            XCTFail("should throw after exhausting retries")
+        } catch {
+            XCTAssertTrue(error is DictationTimeout, "final failure should be a timeout")
+        }
+        let attempts = await counter.count
+        XCTAssertEqual(attempts, 3, "should try the full budget of attempts")
+    }
+}
+
 /// Boxes captured request bodies across the Sendable stub boundary.
 final class ReceivedBox: @unchecked Sendable {
     private var data = Data()
