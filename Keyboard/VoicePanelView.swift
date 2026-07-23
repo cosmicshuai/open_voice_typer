@@ -135,11 +135,24 @@ struct VoicePanelView: View {
                 message: "Settings → General → Keyboard → Keyboards → Voice Typer → Allow Full Access"
             )
         case .noSession:
-            guidance(
-                icon: "iphone.app.switcher",
-                title: "Open Open Voice Typer",
-                message: "Opening the app starts the mic session automatically — then switch back here and speak."
-            )
+            Button {
+                model.openContainingApp()
+            } label: {
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.up.forward.app.fill")
+                        .font(.title2)
+                        .foregroundStyle(Color.appAccent)
+                    Text("Open Voice Typer")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.appAccent)
+                    Text("The mic turned off. Tap to reopen the app — it restarts automatically, then swipe back here to speak.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 24)
+            }
+            .buttonStyle(.plain)
         case .idle, .recording, .processing, .error:
             VStack(spacing: 10) {
                 Text(model.statusText)

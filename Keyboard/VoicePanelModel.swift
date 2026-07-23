@@ -56,8 +56,15 @@ final class VoicePanelModel {
 
     let needsInputModeSwitchKey: Bool
     var onGlobe: () -> Void = {}
+    var onOpenApp: () -> Void = {}
     var insertTextHandler: (String) -> Void = { _ in }
     var deleteBackwardHandler: () -> Void = {}
+
+    /// Opens the containing app so its mic session restarts, then the user
+    /// swipes back and dictates. Wired to the keyboard controller.
+    func openContainingApp() {
+        onOpenApp()
+    }
 
     /// The start-command id of the dictation this keyboard is waiting on.
     /// Deliberately instance-only (never shared through the bridge): each
