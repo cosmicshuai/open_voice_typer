@@ -9,15 +9,20 @@ struct VoicePanelView: View {
     @Bindable var model: VoicePanelModel
     @Namespace private var modeHighlight
 
+    /// Punctuation that's awkward to dictate — tuned for coding and Claude
+    /// Code (slash commands, @-mentions, ~paths, flags, bang, code fences).
+    private let quickSymbols = ["/", "@", "~", "-", "_", "!", "#", "`"]
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             brandRow
-            Spacer(minLength: 6)
+            Spacer(minLength: 4)
             speakArea
-            Spacer(minLength: 6)
-            utilityRow
+            Spacer(minLength: 4)
+            symbolRow
+            controlRow
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
         // Keep controls reachable on iPad instead of stretching edge to edge.
         .frame(maxWidth: 600)
@@ -219,10 +224,31 @@ struct VoicePanelView: View {
         .padding(.horizontal, 24)
     }
 
-    // MARK: Utility row
+    // MARK: Quick symbols + controls
 
-    private var utilityRow: some View {
-        HStack(spacing: 8) {
+    /// Hard-to-dictate punctuation, one tap each.
+    private var symbolRow: some View {
+        HStack(spacing: 5) {
+            ForEach(quickSymbols, id: \.self) { symbol in
+                Button {
+                    model.insertText(symbol)
+                } label: {
+                    Text(symbol)
+                        .font(.body.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Insert \(symbol)")
+            }
+        }
+    }
+
+    /// Globe / undo / space / delete / send. Space is a normal key (dictation
+    /// handles most spacing); send is accented since it's the common finish.
+    private var controlRow: some View {
+        HStack(spacing: 6) {
             if model.needsInputModeSwitchKey {
                 utilityButton(systemImage: "globe") { model.onGlobe() }
                     .accessibilityLabel("Next keyboard")
@@ -245,13 +271,14 @@ struct VoicePanelView: View {
             Button {
                 model.insertText("\n")
             } label: {
-                Text("return")
-                    .font(.subheadline)
+                Text("send")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
                     .frame(width: 76, height: 40)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    .background(LinearGradient.appAccentFill, in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Return")
+            .accessibilityLabel("Send")
         }
     }
 
@@ -259,7 +286,7 @@ struct VoicePanelView: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.subheadline)
-                .frame(width: 44, height: 40)
+                .frame(width: 42, height: 40)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
