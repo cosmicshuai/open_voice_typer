@@ -26,7 +26,7 @@ final class KeyboardViewController: UIInputViewController {
         // can't size the keyboard, falls back to a default height, and draws
         // its own globe/mic row in the uncovered space. Priority 999 keeps it
         // from fighting the system's transient constraints (e.g. rotation).
-        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 288)
+        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 240)
         heightConstraint.priority = UILayoutPriority(999)
 
         NSLayoutConstraint.activate([
