@@ -1,15 +1,8 @@
 import Foundation
 
-/// Thrown when an ASR or polish attempt exceeds its per-attempt timeout
-/// budget. Surfaced to the user only after all retries are exhausted.
-struct DictationTimeout: LocalizedError {
-    var errorDescription: String? {
-        "The request kept timing out. Check your connection and try again."
-    }
-}
-
 /// Runs one dictation through ASR and (unless the style is Raw) polish,
-/// using whatever providers the current settings select.
+/// using whatever providers the current settings select. Each network hop
+/// goes through `AsyncRetry` so a hung request is retried, not fatal.
 struct DictationPipeline: Sendable {
     struct Outcome: Sendable {
         var rawText: String
@@ -60,7 +53,7 @@ struct DictationPipeline: Sendable {
         // timeout-and-retry budget: a slow/hung request is abandoned and
         // retried rather than stalling the whole dictation.
         let asr = makeASRProvider()
-        let raw = try await Self.withTimeoutRetry {
+        let raw = try await AsyncRetry.retryingOnTimeout {
             try await asr.transcribe(ASRRequest(
                 wavData: wavData,
                 language: settings.asrLanguage,
@@ -87,64 +80,12 @@ struct DictationPipeline: Sendable {
             dictionary: SharedCatalog.loadDictionary().map(\.term),
             targetLanguage: settings.targetLanguage
         )
-        return try await Self.withTimeoutRetry {
+        return try await AsyncRetry.retryingOnTimeout {
             try await polisher.polish(request)
         }
     }
 
-    // MARK: Timeout + retry
-
-    /// Attempts an operation up to `maxAttempts` times, giving each attempt
-    /// `timeout` to finish. A timed-out (or connection-lost) attempt is
-    /// retried with a short backoff; any other error fails immediately (a bad
-    /// key or malformed request won't fix itself). Matches the requirement to
-    /// retry ASR and polish three times on timeout.
-    static let maxAttempts = 3
-    static let attemptTimeout: Duration = .seconds(20)
-
-    static func withTimeoutRetry<T: Sendable>(
-        maxAttempts: Int = DictationPipeline.maxAttempts,
-        timeout: Duration = DictationPipeline.attemptTimeout,
-        _ operation: @escaping @Sendable () async throws -> T
-    ) async throws -> T {
-        var lastError: Error?
-        for attempt in 1...maxAttempts {
-            do {
-                return try await withTimeout(timeout, operation)
-            } catch {
-                lastError = error
-                guard Self.isRetryable(error), attempt < maxAttempts else { throw error }
-                try? await Task.sleep(for: .milliseconds(400 * attempt))
-            }
-        }
-        throw lastError ?? DictationTimeout()
-    }
-
-    /// Races `operation` against a timeout; whichever finishes first wins and
-    /// the other is cancelled.
-    private static func withTimeout<T: Sendable>(
-        _ timeout: Duration,
-        _ operation: @escaping @Sendable () async throws -> T
-    ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask { try await operation() }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                throw DictationTimeout()
-            }
-            defer { group.cancelAll() }
-            return try await group.next()!
-        }
-    }
-
-    private static func isRetryable(_ error: Error) -> Bool {
-        if error is DictationTimeout { return true }
-        if let urlError = error as? URLError {
-            return [.timedOut, .networkConnectionLost, .cannotConnectToHost, .notConnectedToInternet]
-                .contains(urlError.code)
-        }
-        return false
-    }
+    // MARK: Provider construction
 
     private func makeASRProvider() -> ASRProvider {
         switch settings.asrBackend {
