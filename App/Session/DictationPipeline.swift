@@ -27,12 +27,7 @@ struct DictationPipeline: Sendable {
     }
 
     var polishEngineName: String {
-        switch settings.polishBackend {
-        case .openAICompatible: settings.polishModel
-        case .deepseek: settings.deepseekModel
-        case .anthropic: settings.anthropicModel
-        case .gemini: settings.geminiModel
-        }
+        PolishBackendSpec.for(settings.polishBackend).model(in: settings)
     }
 
     func run(wavData: Data, style: Style) async throws -> Outcome {
@@ -101,29 +96,6 @@ struct DictationPipeline: Sendable {
     }
 
     private func makePolishProvider() -> PolishProvider {
-        switch settings.polishBackend {
-        case .openAICompatible:
-            OpenAICompatibleLLM(
-                baseURL: settings.polishBaseURL,
-                model: settings.polishModel,
-                apiKey: { KeychainStore.get(.polishOpenAIKey) }
-            )
-        case .deepseek:
-            OpenAICompatibleLLM(
-                baseURL: ProviderSettings.deepseekBaseURL,
-                model: settings.deepseekModel,
-                apiKey: { KeychainStore.get(.polishDeepSeekKey) }
-            )
-        case .anthropic:
-            AnthropicLLM(
-                model: settings.anthropicModel,
-                apiKey: { KeychainStore.get(.polishAnthropicKey) }
-            )
-        case .gemini:
-            GeminiLLM(
-                model: settings.geminiModel,
-                apiKey: { KeychainStore.get(.polishGeminiKey) }
-            )
-        }
+        PolishBackendSpec.for(settings.polishBackend).makeProvider(settings)
     }
 }
