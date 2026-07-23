@@ -265,21 +265,10 @@ struct VoicePanelView: View {
         }
     }
 
-    /// esc / delete / send — send is accented as the common finish. Keyboard
+    /// delete / send — send is accented as the common finish. Keyboard
     /// switching uses the system globe row iOS draws below custom keyboards.
     private var controlRow: some View {
         HStack(spacing: 6) {
-            Button {
-                model.insertText("\u{1B}") // ESC — useful in Claude Code / terminals
-            } label: {
-                Text("esc")
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .background { keycap() }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Escape")
             Button {
                 model.deleteBackward()
             } label: {
