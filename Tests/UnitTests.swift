@@ -129,7 +129,7 @@ final class SettingsMigrationTests: XCTestCase {
     }
 }
 
-final class TimeoutRetryTests: XCTestCase {
+final class AsyncRetryTests: XCTestCase {
     private actor Counter {
         private(set) var count = 0
         func bump() -> Int { count += 1; return count }
@@ -137,7 +137,7 @@ final class TimeoutRetryTests: XCTestCase {
 
     func testRetriesTimeoutThenSucceeds() async throws {
         let counter = Counter()
-        let result = try await DictationPipeline.withTimeoutRetry(maxAttempts: 3, timeout: .milliseconds(80)) {
+        let result = try await AsyncRetry.retryingOnTimeout(maxAttempts: 3, timeout: .milliseconds(80)) {
             let n = await counter.bump()
             if n < 3 { try await Task.sleep(for: .milliseconds(400)) } // first two time out
             return "done"
@@ -150,7 +150,7 @@ final class TimeoutRetryTests: XCTestCase {
     func testNonTimeoutErrorFailsImmediately() async {
         let counter = Counter()
         do {
-            _ = try await DictationPipeline.withTimeoutRetry(maxAttempts: 3, timeout: .seconds(5)) { () async throws -> String in
+            _ = try await AsyncRetry.retryingOnTimeout(maxAttempts: 3, timeout: .seconds(5)) { () async throws -> String in
                 _ = await counter.bump()
                 throw PolishError.missingAPIKey
             }
@@ -165,14 +165,14 @@ final class TimeoutRetryTests: XCTestCase {
     func testExhaustsRetriesThenThrowsTimeout() async {
         let counter = Counter()
         do {
-            _ = try await DictationPipeline.withTimeoutRetry(maxAttempts: 3, timeout: .milliseconds(60)) { () async throws -> String in
+            _ = try await AsyncRetry.retryingOnTimeout(maxAttempts: 3, timeout: .milliseconds(60)) { () async throws -> String in
                 _ = await counter.bump()
                 try await Task.sleep(for: .milliseconds(400)) // always times out
                 return "never"
             }
             XCTFail("should throw after exhausting retries")
         } catch {
-            XCTAssertTrue(error is DictationTimeout, "final failure should be a timeout")
+            XCTAssertTrue(error is TimeoutError, "final failure should be a timeout")
         }
         let attempts = await counter.count
         XCTAssertEqual(attempts, 3, "should try the full budget of attempts")
