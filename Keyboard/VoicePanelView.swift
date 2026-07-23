@@ -9,16 +9,12 @@ struct VoicePanelView: View {
     @Bindable var model: VoicePanelModel
     @Namespace private var modeHighlight
 
-    /// Punctuation that's awkward to dictate — @-mentions, bang, slash.
-    private let quickSymbols = ["@", "!", "/"]
-
     var body: some View {
         VStack(spacing: 10) {
             brandRow
             Spacer(minLength: 4)
             speakArea
             Spacer(minLength: 4)
-            symbolRow
             controlRow
         }
         .padding(.horizontal, 12)
@@ -244,26 +240,7 @@ struct VoicePanelView: View {
         .padding(.horizontal, 24)
     }
 
-    // MARK: Quick symbols + controls
-
-    /// Hard-to-dictate punctuation, one tap each.
-    private var symbolRow: some View {
-        HStack(spacing: 5) {
-            ForEach(quickSymbols, id: \.self) { symbol in
-                Button {
-                    model.insertText(symbol)
-                } label: {
-                    Text(symbol)
-                        .font(.body.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 38)
-                        .background { keycap() }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Insert \(symbol)")
-            }
-        }
-    }
+    // MARK: Controls
 
     /// delete / send — send is accented as the common finish. Keyboard
     /// switching uses the system globe row iOS draws below custom keyboards.
