@@ -72,6 +72,17 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("- OpenVoiceTyper"))
     }
 
+    func testHemingwayStyleIsBuiltInAndKeepsBaseRules() {
+        XCTAssertTrue(Style.builtIns.contains { $0.id == Style.hemingway.id })
+        let prompt = PromptBuilder.systemPrompt(for: PolishRequest(
+            transcript: "whatever",
+            style: .hemingway
+        ))
+        XCTAssertTrue(prompt.contains("Hemingway"), "style voice missing")
+        XCTAssertTrue(prompt.contains("declarative"), "style instructions missing")
+        XCTAssertTrue(prompt.contains("NEVER answer"), "base reshape-don't-answer rule must survive")
+    }
+
     func testTranslateStyleSubstitutesTargetLanguage() {
         let prompt = PromptBuilder.systemPrompt(for: PolishRequest(
             transcript: "whatever",

@@ -64,7 +64,22 @@ struct Style: Codable, Identifiable, Hashable, Sendable {
         isBuiltIn: true
     )
 
-    static let builtIns: [Style] = [.raw, .light, .structured, .formal, .translate]
+    /// The fun one: rambling speech in, Papa's prose out.
+    static let hemingway = Style(
+        id: "builtin.hemingway",
+        name: "Hemingway",
+        instructions: """
+        Rewrite the transcript in the voice of Ernest Hemingway. Short, declarative \
+        sentences. Plain, concrete words — cut adverbs, qualifiers, and ornament. \
+        Prefer simple verbs and the active voice. Let facts stand without \
+        sentimentality; understatement carries the feeling. Keep the speaker's \
+        meaning and every substantive detail. It should read true and clean, \
+        like a telegram from a war correspondent who cares about the words.
+        """,
+        isBuiltIn: true
+    )
+
+    static let builtIns: [Style] = [.raw, .light, .structured, .formal, .hemingway, .translate]
 }
 
 // MARK: - Dictionary
