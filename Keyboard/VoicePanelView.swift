@@ -10,14 +10,14 @@ struct VoicePanelView: View {
     @Namespace private var modeHighlight
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             brandRow
-            Spacer(minLength: 0)
+            Spacer(minLength: 6)
             speakArea
-            Spacer(minLength: 0)
+            Spacer(minLength: 6)
             utilityRow
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .padding(.vertical, 10)
         // Keep controls reachable on iPad instead of stretching edge to edge.
         .frame(maxWidth: 600)
