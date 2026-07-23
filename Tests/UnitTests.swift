@@ -108,6 +108,14 @@ final class SettingsMigrationTests: XCTestCase {
         XCTAssertEqual(settings.sessionAutoEndMinutes, 60)
         XCTAssertEqual(settings.deepseekModel, "deepseek-v4-flash", "missing field should take the default")
     }
+
+    func testInvalidTargetLanguageClampsToDefault() throws {
+        let bad = try JSONDecoder().decode(ProviderSettings.self, from: Data(#"{"targetLanguage":"Klingon"}"#.utf8))
+        XCTAssertEqual(bad.targetLanguage, "English", "an unknown language must clamp to the default")
+
+        let good = try JSONDecoder().decode(ProviderSettings.self, from: Data(#"{"targetLanguage":"Japanese"}"#.utf8))
+        XCTAssertEqual(good.targetLanguage, "Japanese", "a known language must be preserved")
+    }
 }
 
 /// Boxes captured request bodies across the Sendable stub boundary.
