@@ -26,6 +26,23 @@ struct VoicePanelView: View {
         // Keep controls reachable on iPad instead of stretching edge to edge.
         .frame(maxWidth: 600)
         .frame(maxWidth: .infinity)
+        // A quiet brand wash so the panel doesn't read as bare system gray.
+        .background {
+            LinearGradient(
+                colors: [Color.appAccent.opacity(0.10), Color.appAccent.opacity(0.02)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        }
+    }
+
+    /// Elevated key-cap look shared by all tappable keys — white (or lifted
+    /// gray in dark keyboards) with a crisp edge shadow, like system keys.
+    private func keycap(cornerRadius: CGFloat = 9) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(Color.keyCap)
+            .shadow(color: .black.opacity(0.22), radius: 0.5, y: 1)
     }
 
     // MARK: Brand row
@@ -122,9 +139,10 @@ struct VoicePanelView: View {
                         .font(.caption2)
                 }
                 .font(.footnote.weight(.medium))
+                .foregroundStyle(Color.appAccent)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(.quaternary, in: Capsule())
+                .background(Color.appAccent.opacity(0.14), in: Capsule())
             }
             .disabled(!model.canDictate)
         }
@@ -175,29 +193,32 @@ struct VoicePanelView: View {
                         Capsule()
                             .fill(
                                 model.phase == .recording
-                                    ? AnyShapeStyle(LinearGradient.recordingFill)
-                                    : AnyShapeStyle(Color.primary)
+                                    ? LinearGradient.recordingFill
+                                    : LinearGradient.appAccentFill
+                            )
+                            .overlay(
+                                // A hairline highlight so the pill reads
+                                // dimensional instead of a flat slab.
+                                Capsule()
+                                    .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
+                                    .blendMode(.plusLighter)
                             )
                             .frame(width: 168, height: 56)
                             .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.12 : 1)
                             .animation(.easeOut(duration: 0.12), value: model.audioLevel)
                             .shadow(
                                 color: model.phase == .recording
-                                    ? Color.red.opacity(0.35)
-                                    : Color.black.opacity(0.12),
-                                radius: 10, y: 4
+                                    ? Color.red.opacity(0.38)
+                                    : Color.appAccent.opacity(0.38),
+                                radius: 12, y: 5
                             )
                         if model.phase == .processing {
                             ProgressView()
-                                .tint(Color(uiColor: .systemBackground))
+                                .tint(.white)
                         } else {
                             Image(systemName: model.phase == .recording ? "stop.fill" : "mic.fill")
                                 .font(.system(size: 24))
-                                .foregroundStyle(
-                                    model.phase == .recording
-                                        ? Color.white
-                                        : Color(uiColor: .systemBackground)
-                                )
+                                .foregroundStyle(.white)
                                 .contentTransition(.symbolEffect(.replace))
                         }
                     }
@@ -236,7 +257,7 @@ struct VoicePanelView: View {
                         .font(.body.weight(.medium))
                         .frame(maxWidth: .infinity)
                         .frame(height: 38)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+                        .background { keycap() }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Insert \(symbol)")
@@ -255,7 +276,7 @@ struct VoicePanelView: View {
                     .font(.subheadline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    .background { keycap() }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Escape")
@@ -266,7 +287,7 @@ struct VoicePanelView: View {
                     .font(.subheadline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    .background { keycap() }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Delete")
@@ -278,7 +299,8 @@ struct VoicePanelView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background(LinearGradient.appAccentFill, in: RoundedRectangle(cornerRadius: 8))
+                    .background(LinearGradient.appAccentFill, in: RoundedRectangle(cornerRadius: 9))
+                    .shadow(color: Color.appAccent.opacity(0.30), radius: 5, y: 2)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Send")
