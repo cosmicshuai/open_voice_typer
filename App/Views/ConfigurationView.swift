@@ -48,7 +48,7 @@ struct ConfigurationView: View {
                     plainField("gpt-4o-transcribe", text: $settings.asrModel)
                 }
                 keyRow("API Key", key: .asrAPIKey, target: .openAICompatible(baseURL: settings.asrBaseURL),
-                       getKeyURL: keyConsoleURL(forBaseURL: settings.asrBaseURL))
+                       getKeyURL: ProviderConsole.keyURL(forBaseURL: settings.asrBaseURL))
             }
             LabeledContent("Language") {
                 plainField("auto", text: $settings.asrLanguage)
@@ -64,66 +64,65 @@ struct ConfigurationView: View {
 
     // MARK: Polish
 
+    /// Entirely data-driven from `PolishBackendSpec` — a new provider needs no
+    /// change here, only a registry entry.
     private var polishSection: some View {
-        Section {
+        let spec = PolishBackendSpec.for(settings.polishBackend)
+        return Section {
             Picker("Provider", selection: $settings.polishBackend) {
                 ForEach(ProviderSettings.PolishBackend.allCases, id: \.self) { backend in
                     Text(backend.displayName).tag(backend)
                 }
             }
-            switch settings.polishBackend {
-            case .openAICompatible:
+            // Configurable-endpoint providers get base-URL presets + field.
+            if let baseURLKeyPath = spec.baseURLKeyPath {
                 presetRow(ProviderPreset.polish) { preset in
-                    settings.polishBaseURL = preset.baseURL
-                    settings.polishModel = preset.model
+                    settings[keyPath: baseURLKeyPath] = preset.baseURL
+                    settings[keyPath: spec.modelKeyPath] = preset.model
                 }
                 LabeledContent("Base URL") {
-                    plainField("https://api.openai.com/v1", text: $settings.polishBaseURL)
+                    plainField("https://api.openai.com/v1", text: binding(baseURLKeyPath))
                 }
-                LabeledContent("Model") {
-                    plainField("gpt-4o-mini", text: $settings.polishModel)
-                }
-                keyRow("API Key", key: .polishOpenAIKey, target: .openAICompatible(baseURL: settings.polishBaseURL),
-                       getKeyURL: keyConsoleURL(forBaseURL: settings.polishBaseURL))
-            case .deepseek:
-                Menu {
-                    ForEach(ProviderSettings.deepseekModels, id: \.self) { model in
-                        Button(model) { settings.deepseekModel = model }
-                    }
-                } label: {
-                    LabeledContent("Preset") {
-                        HStack(spacing: 4) {
-                            Text("Choose…")
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(Color.appAccent)
-                    }
-                }
-                LabeledContent("Model") {
-                    plainField("deepseek-v4-flash", text: $settings.deepseekModel)
-                }
-                keyRow("API Key", key: .polishDeepSeekKey,
-                       target: .openAICompatible(baseURL: ProviderSettings.deepseekBaseURL),
-                       getKeyURL: "https://platform.deepseek.com/api_keys")
-            case .anthropic:
-                LabeledContent("Model") {
-                    plainField("claude-sonnet-5", text: $settings.anthropicModel)
-                }
-                keyRow("API Key", key: .polishAnthropicKey, target: .anthropic,
-                       getKeyURL: "https://console.anthropic.com/settings/keys")
-            case .gemini:
-                LabeledContent("Model") {
-                    plainField("gemini-2.5-flash", text: $settings.geminiModel)
-                }
-                keyRow("API Key", key: .polishGeminiKey, target: .gemini,
-                       getKeyURL: "https://aistudio.google.com/apikey")
             }
+            // Fixed-model quick-pick (e.g. DeepSeek's flash/pro).
+            if !spec.presetModels.isEmpty {
+                modelPresetMenu(spec)
+            }
+            LabeledContent("Model") {
+                plainField(ProviderSettings()[keyPath: spec.modelKeyPath], text: binding(spec.modelKeyPath))
+            }
+            keyRow("API Key", key: spec.keychainKey,
+                   target: spec.makeVerifyTarget(settings),
+                   getKeyURL: spec.makeGetKeyURL(settings))
         } header: {
             Text("Polish")
         } footer: {
             Text("Keys live in the iOS Keychain and are only read by this app — never by the keyboard.")
         }
+    }
+
+    /// Quick-pick menu for a backend that offers a fixed set of models.
+    private func modelPresetMenu(_ spec: PolishBackendSpec) -> some View {
+        Menu {
+            ForEach(spec.presetModels, id: \.self) { model in
+                Button(model) { settings[keyPath: spec.modelKeyPath] = model }
+            }
+        } label: {
+            LabeledContent("Preset") {
+                HStack(spacing: 4) {
+                    Text("Choose…")
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(Color.appAccent)
+            }
+        }
+    }
+
+    /// A two-way binding into a `ProviderSettings` string field by key path,
+    /// so the registry's key paths can drive text fields directly.
+    private func binding(_ keyPath: WritableKeyPath<ProviderSettings, String>) -> Binding<String> {
+        Binding(get: { settings[keyPath: keyPath] }, set: { settings[keyPath: keyPath] = $0 })
     }
 
     // MARK: Session / Translate / About
@@ -189,16 +188,6 @@ struct ConfigurationView: View {
         }
     }
 
-    /// Where to create an API key, recognized from the endpoint host.
-    private func keyConsoleURL(forBaseURL baseURL: String) -> String? {
-        let host = URL(string: baseURL)?.host() ?? baseURL
-        if host.contains("openai.com") { return "https://platform.openai.com/api-keys" }
-        if host.contains("groq.com") { return "https://console.groq.com/keys" }
-        if host.contains("deepseek.com") { return "https://platform.deepseek.com/api_keys" }
-        if host.contains("z.ai") { return "https://z.ai/manage-apikey/apikey-list" }
-        if host.contains("bigmodel.cn") { return "https://open.bigmodel.cn/usercenter/apikeys" }
-        return nil
-    }
 
     private func keyRow(
         _ label: String,
