@@ -88,6 +88,20 @@ final class AudioRecorder: @unchecked Sendable {
         try engine.start()
     }
 
+    /// Full teardown and rebuild, for when `recoverEngine()` can't help.
+    ///
+    /// Recovery reuses the tap and converter installed by `startEngine()`, and
+    /// both are bound to the input format sampled at that moment. An
+    /// interruption that changes the route (headphones pulled, a call ending on
+    /// a different device) leaves them describing hardware that no longer
+    /// exists, and the engine can never be started against them again — every
+    /// later `recoverEngine()` throws the same error forever. Dropping the tap
+    /// and re-sampling the format is the only way out.
+    func restartEngine() throws {
+        stopEngine()
+        try startEngine()
+    }
+
     func stopEngine() {
         guard isEngineRunning else { return }
         engine.inputNode.removeTap(onBus: 0)
@@ -205,6 +219,7 @@ final class AudioRecorder: @unchecked Sendable {
 enum AudioRecorderError: LocalizedError {
     case formatUnavailable
     case microphonePermissionDenied
+    case engineUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -212,6 +227,8 @@ enum AudioRecorderError: LocalizedError {
             "Could not configure the 16 kHz recording format."
         case .microphonePermissionDenied:
             "Microphone permission was denied. Enable it in iOS Settings."
+        case .engineUnavailable:
+            "The microphone is unavailable — another app or a call may be using it. Tap the mic to start it again."
         }
     }
 }
