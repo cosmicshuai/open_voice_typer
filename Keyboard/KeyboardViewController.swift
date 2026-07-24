@@ -13,14 +13,20 @@ final class KeyboardViewController: UIInputViewController {
         model.deleteBackwardHandler = { [weak self] in self?.textDocumentProxy.deleteBackward() }
         self.model = model
 
+        // Paint the input view itself with the panel's wash tone. Some hosts
+        // (iMessage) leave a band at the top of the keyboard that the SwiftUI
+        // content doesn't cover; if that band is inside our input view it
+        // shows this color instead of the host's gray. (safeAreaRegions = []
+        // makes the hosting content ignore host safe-area insets too.)
+        view.backgroundColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.16, green: 0.16, blue: 0.20, alpha: 1)
+                : UIColor(red: 0.886, green: 0.894, blue: 0.949, alpha: 1)
+        }
+
         let panel = UIHostingController(rootView: VoicePanelView(model: model).tint(Color.appAccent))
         panel.view.translatesAutoresizingMaskIntoConstraints = false
         panel.view.backgroundColor = .clear
-        // Some hosts (iMessage) hand the keyboard a top safe-area inset that
-        // Safari doesn't. Left in place, the hosting controller insets the
-        // SwiftUI content — and its background wash — leaving a gray strip at
-        // the top of the panel. Ignoring safe areas lets the wash fill the
-        // input view edge to edge.
         panel.safeAreaRegions = []
         addChild(panel)
         view.addSubview(panel.view)
@@ -32,7 +38,7 @@ final class KeyboardViewController: UIInputViewController {
         // a shorter input view inside it, leaving a gray band on top — so the
         // input view must be tall enough to fill that frame. Priority 999
         // keeps it from fighting the system's transient constraints.
-        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 291)
+        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 240)
         heightConstraint.priority = UILayoutPriority(999)
 
         NSLayoutConstraint.activate([
