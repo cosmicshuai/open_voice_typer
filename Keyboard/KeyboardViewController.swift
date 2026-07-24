@@ -16,6 +16,12 @@ final class KeyboardViewController: UIInputViewController {
         let panel = UIHostingController(rootView: VoicePanelView(model: model).tint(Color.appAccent))
         panel.view.translatesAutoresizingMaskIntoConstraints = false
         panel.view.backgroundColor = .clear
+        // Some hosts (iMessage) hand the keyboard a top safe-area inset that
+        // Safari doesn't. Left in place, the hosting controller insets the
+        // SwiftUI content — and its background wash — leaving a gray strip at
+        // the top of the panel. Ignoring safe areas lets the wash fill the
+        // input view edge to edge.
+        panel.safeAreaRegions = []
         addChild(panel)
         view.addSubview(panel.view)
         panel.didMove(toParent: self)
