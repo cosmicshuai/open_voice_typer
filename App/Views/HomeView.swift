@@ -52,8 +52,10 @@ struct HomeView: View {
                 [0, 1], [0.5, 1], [1, 1],
             ],
             colors: [
-                Color.appAccent.opacity(0.32), Color.appAccent.opacity(0.12), Color.appAccentLight.opacity(0.22),
-                Color.appAccent.opacity(0.10), Color.appAccent.opacity(0.03), Color.appAccent.opacity(0.07),
+                // Teal glows out of the top-right and fades into indigo — the
+                // brand two-tone, kept quiet as an ambient wash.
+                Color.appAccent.opacity(0.32), Color.appAccentLight.opacity(0.16), Color.appTeal.opacity(0.22),
+                Color.appAccent.opacity(0.10), Color.appAccent.opacity(0.03), Color.appTeal.opacity(0.06),
                 Color.clear, Color.appAccent.opacity(0.04), Color.clear,
             ]
         )
@@ -116,8 +118,8 @@ struct HomeView: View {
                     .scaleEffect(1 + CGFloat(model.audioLevel) * 0.3)
                     .animation(.easeOut(duration: 0.1), value: model.audioLevel)
                     .shadow(
-                        color: (model.isRecording ? Color.red : Color.appAccent).opacity(0.38),
-                        radius: 20, y: 10
+                        color: (model.isRecording ? Color.red : Color.appAccent).opacity(0.5),
+                        radius: 22, y: 11
                     )
                     .overlay {
                         // Specular top edge, like a pressed glass bead.
@@ -175,7 +177,7 @@ struct HomeView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "waveform")
                         .symbolEffect(.variableColor.iterative, options: .repeating)
-                        .foregroundStyle(Color.appAccent)
+                        .foregroundStyle(LinearGradient.brandMark)
                     Text("Transcribing & polishing…")
                 }
                 .font(.subheadline)
