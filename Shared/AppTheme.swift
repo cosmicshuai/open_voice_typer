@@ -27,6 +27,11 @@ extension Color {
             ? UIColor(white: 1, alpha: 0.16)
             : UIColor.white
     })
+
+    /// Teal companion accent (#22D3C5) — pairs with the indigo for the brand
+    /// mark, echoing the app icon's sound-waves. Not an action color; indigo
+    /// stays primary.
+    static let appTeal = Color(red: 0x22 / 255, green: 0xD3 / 255, blue: 0xC5 / 255)
 }
 
 extension LinearGradient {
@@ -42,5 +47,13 @@ extension LinearGradient {
         colors: [Color(red: 1.0, green: 0.36, blue: 0.32), Color(red: 0.86, green: 0.13, blue: 0.18)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
+    )
+
+    /// Teal→indigo brand gradient (#22D3C5 → #7E86FA), for the waveform mark.
+    /// Fixed stops (not light/dark-adaptive) since it's a brand element.
+    static let brandMark = LinearGradient(
+        colors: [Color.appTeal, Color(red: 0x7E / 255, green: 0x86 / 255, blue: 0xFA / 255)],
+        startPoint: .top,
+        endPoint: .bottom
     )
 }
