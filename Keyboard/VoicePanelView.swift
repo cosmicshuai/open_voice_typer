@@ -44,20 +44,21 @@ struct VoicePanelView: View {
     // MARK: Brand row
 
     private var brandRow: some View {
+        // The mark and the trailing control have different widths, so equal
+        // spacers around the toggle would shove it off-center. Pin the mark
+        // and control to the edges and center the toggle in an overlay so it
+        // sits dead-center of the panel regardless of what flanks it.
         HStack(spacing: 8) {
             Image(systemName: "waveform")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(LinearGradient.brandMark)
                 .accessibilityLabel("Voice Typer")
 
-            Spacer(minLength: 4)
-
-            modeToggle
-
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
 
             trailingControl
         }
+        .overlay { modeToggle }
     }
 
     /// Dictate (waveform) | Translate (dictionary), with a gradient thumb
