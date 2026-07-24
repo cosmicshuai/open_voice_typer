@@ -26,13 +26,13 @@ final class KeyboardViewController: UIInputViewController {
         view.addSubview(panel.view)
         panel.didMove(toParent: self)
 
-        // The keyboard's height must be set on the INPUT VIEW itself; the
-        // panel just fills it. Putting a height on the panel while also
-        // pinning it to all four edges over-constrains the layout, so iOS
-        // can't size the keyboard, falls back to a default height, and draws
-        // its own globe/mic row in the uncovered space. Priority 999 keeps it
-        // from fighting the system's transient constraints (e.g. rotation).
-        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 240)
+        // The keyboard's height is set on the INPUT VIEW itself; the panel
+        // just fills it. It matches the standard iPhone keyboard height:
+        // hosts like iMessage reserve a fixed keyboard frame and bottom-align
+        // a shorter input view inside it, leaving a gray band on top — so the
+        // input view must be tall enough to fill that frame. Priority 999
+        // keeps it from fighting the system's transient constraints.
+        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 291)
         heightConstraint.priority = UILayoutPriority(999)
 
         NSLayoutConstraint.activate([
