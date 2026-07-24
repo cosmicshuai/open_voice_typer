@@ -181,6 +181,17 @@ final class VoicePanelModel {
         if phase == .recording {
             DictationBridge.send(KeyboardCommand(kind: .cancelDictation, styleID: selectedStyleID))
         }
+        // The dictation is abandoned either way, so the transient phases are no
+        // longer true — and leaving one set strands the panel. This model
+        // outlives a dismissal (the view controller reuses it across
+        // appearances), and refreshSessionState() only clears .recording /
+        // .processing when the session is *dead*. With the app still alive, a
+        // keyboard dismissed mid-dictation therefore came back showing
+        // "Listening…" or "Working…" forever: nothing was awaited, so no result
+        // could land, and no timeout was armed to break out of it.
+        if phase == .recording || phase == .processing {
+            phase = .idle
+        }
         awaitingCommandID = nil
         timeoutTask?.cancel()
         timeoutTask = nil
@@ -207,6 +218,15 @@ final class VoicePanelModel {
                 self.fail("The app didn't start recording. Open Open Voice Typer once, then try again.")
             }
         case .recording:
+            // Defence in depth: stopping without an awaited id would arm no
+            // timeout (scheduleTimeout ignores a nil id) and match no result,
+            // parking the panel in .processing with no way out. Nothing is in
+            // flight, so just go back to idle.
+            guard awaitingCommandID != nil else {
+                recordingStartedAt = nil
+                phase = .idle
+                return
+            }
             // A quick tap-tap (misclick) produced too little audio to be worth
             // transcribing — cancel it locally so there's nothing to wait for.
             if let startedAt = recordingStartedAt,
