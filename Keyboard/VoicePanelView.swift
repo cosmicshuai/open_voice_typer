@@ -256,7 +256,7 @@ struct VoicePanelView: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KeyPressStyle())
         .disabled(model.phase == .processing)
         .accessibilityLabel(model.phase == .recording ? "Stop and insert" : "Tap to speak")
     }
@@ -272,7 +272,7 @@ struct VoicePanelView: View {
                 .frame(width: returnSize.width, height: returnSize.height)
                 .background { keycap(cornerRadius: returnSize.height / 2) }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KeyPressStyle())
         .accessibilityLabel("Return")
     }
 
@@ -282,9 +282,18 @@ struct VoicePanelView: View {
     /// one tap beats holding delete.
     private var utilityColumn: some View {
         VStack(spacing: 10) {
-            utilityKey("delete.left", label: "Delete") {
+            HoldRepeatKey {
                 model.deleteBackward()
+            } label: { isPressed in
+                utilityKeyFace("delete.left", isPressed: isPressed)
             }
+            // A gesture-driven view is not a Button, so the trait and the
+            // activation action have to be restated or VoiceOver sees an inert
+            // image and offers no way to delete at all.
+            .accessibilityLabel("Delete")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { model.deleteBackward() }
+
             utilityKey("arrow.uturn.backward", label: "Undo dictation") {
                 model.undoLastInsert()
             }
@@ -299,13 +308,20 @@ struct VoicePanelView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.footnote)
-                .frame(width: utilityKeySide, height: utilityKeySide)
-                .background { keycap(cornerRadius: utilityKeySide / 2) }
+            utilityKeyFace(systemImage, isPressed: false)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KeyPressStyle())
         .accessibilityLabel(label)
+    }
+
+    private func utilityKeyFace(_ systemImage: String, isPressed: Bool) -> some View {
+        Image(systemName: systemImage)
+            .font(.footnote)
+            .frame(width: utilityKeySide, height: utilityKeySide)
+            .background { keycap(cornerRadius: utilityKeySide / 2) }
+            .opacity(isPressed ? KeyPressStyle.pressedOpacity : 1)
+            .scaleEffect(isPressed ? KeyPressStyle.pressedScale : 1)
+            .animation(.easeOut(duration: 0.12), value: isPressed)
     }
 
     private func guidance(icon: String, title: String, message: String) -> some View {
@@ -321,5 +337,75 @@ struct VoicePanelView: View {
         }
         // Clear the utility column so the copy never runs under it.
         .padding(.horizontal, utilityKeySide + 16)
+    }
+}
+
+/// Touch feedback for keys. `.buttonStyle(.plain)` draws no pressed state at
+/// all, so every key on this panel used to look inert under the thumb while
+/// system keys visibly react — the one cue that a tap registered on a surface
+/// where the result (inserted text) is often off-screen behind the keyboard.
+private struct KeyPressStyle: ButtonStyle {
+    static let pressedOpacity: Double = 0.55
+    static let pressedScale: CGFloat = 0.96
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? Self.pressedOpacity : 1)
+            .scaleEffect(configuration.isPressed ? Self.pressedScale : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// A key that fires once on touch-down and then repeats while held, matching
+/// the system keyboard's delete cadence (~0.4s before the run starts, then
+/// about eleven a second).
+///
+/// A plain Button fires once on release, which made holding ⌫ appear broken:
+/// the only way to clear a dictation that landed wrong was to tap once per
+/// character. It's built on a 0-distance DragGesture rather than a Button
+/// because the repeat has to begin on touch-*down* and end on lift, and a
+/// Button exposes neither edge.
+private struct HoldRepeatKey<Label: View>: View {
+    let action: () -> Void
+    @ViewBuilder let label: (Bool) -> Label
+
+    /// UIKit's key-repeat timings.
+    private static var delay: Duration { .milliseconds(400) }
+    private static var interval: Duration { .milliseconds(90) }
+
+    @State private var isPressed = false
+    @State private var repeatTask: Task<Void, Never>?
+
+    var body: some View {
+        label(isPressed)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        // onChanged fires repeatedly as the thumb settles; only
+                        // the first crossing is the actual press.
+                        guard !isPressed else { return }
+                        isPressed = true
+                        action()
+                        repeatTask = Task { @MainActor in
+                            try? await Task.sleep(for: Self.delay)
+                            while !Task.isCancelled {
+                                action()
+                                try? await Task.sleep(for: Self.interval)
+                            }
+                        }
+                    }
+                    .onEnded { _ in endPress() }
+            )
+            // A keyboard can be torn down mid-hold (the host dismisses it, the
+            // user switches keyboards); without this the loop would keep
+            // deleting into a proxy that is no longer ours.
+            .onDisappear(perform: endPress)
+    }
+
+    private func endPress() {
+        isPressed = false
+        repeatTask?.cancel()
+        repeatTask = nil
     }
 }

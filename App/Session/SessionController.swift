@@ -227,7 +227,8 @@ final class SessionController {
     }
 
     private func saveHistory(outcome: DictationPipeline.Outcome, styleID: String) {
-        modelContainer.mainContext.insert(TranscriptRecord(
+        let context = modelContainer.mainContext
+        context.insert(TranscriptRecord(
             rawText: outcome.rawText,
             polishedText: outcome.polishedText,
             styleID: styleID,
@@ -235,6 +236,18 @@ final class SessionController {
             engineName: outcome.engineName,
             audioSeconds: outcome.audioSeconds
         ))
+        // Save explicitly rather than trusting autosave. These inserts happen
+        // while the app is backgrounded behind the keyboard, and autosave is
+        // driven by the run loop and app-lifecycle events — a suspension can
+        // land before it ever fires, silently losing the transcript the user
+        // just dictated. Failing to persist history must not take down the
+        // dictation itself (the text is already on its way to the keyboard),
+        // so this surfaces the error rather than throwing.
+        do {
+            try context.save()
+        } catch {
+            lastError = "Couldn't save to history: \(error.localizedDescription)"
+        }
     }
 
     // MARK: Level metering

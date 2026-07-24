@@ -78,4 +78,45 @@ final class AudioRecorderTests: XCTestCase {
         // The 400ms of pre-capture audio must not leak into the window.
         XCTAssertLessThan(wav.count, 44 + 16_000, "pre-capture audio leaked into the capture window")
     }
+
+    /// Tap bookkeeping across restarts. Only one tap may exist per bus, and
+    /// installing a second raises an Objective-C exception Swift cannot catch,
+    /// so an unbalanced install/remove is a crash rather than a failure — which
+    /// is why this asserts by surviving at all.
+    func testEngineSurvivesRepeatedRestarts() async throws {
+        guard await AudioRecorder.requestPermission() else {
+            throw XCTSkip("microphone permission not granted")
+        }
+
+        let recorder = AudioRecorder()
+        for _ in 0..<3 {
+            try recorder.startEngine()
+            XCTAssertTrue(recorder.isEngineRunning)
+            recorder.stopEngine()
+            XCTAssertFalse(recorder.isEngineRunning)
+        }
+
+        // And it still records afterwards, so the tap was reinstalled rather
+        // than merely not double-installed.
+        try recorder.startEngine()
+        recorder.beginCapture()
+        try await Task.sleep(for: .milliseconds(500))
+        let wav = recorder.endCapture()
+        recorder.stopEngine()
+        XCTAssertGreaterThan(wav.count, 8_000, "engine stopped capturing after restarts")
+    }
+
+    /// startEngine() is idempotent — a second call while running must not try
+    /// to install a second tap on the same bus.
+    func testStartEngineIsIdempotent() async throws {
+        guard await AudioRecorder.requestPermission() else {
+            throw XCTSkip("microphone permission not granted")
+        }
+
+        let recorder = AudioRecorder()
+        try recorder.startEngine()
+        try recorder.startEngine()
+        XCTAssertTrue(recorder.isEngineRunning)
+        recorder.stopEngine()
+    }
 }

@@ -64,7 +64,18 @@ final class AudioRecorder: @unchecked Sendable {
             self?.consume(buffer, targetFormat: targetFormat)
         }
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            // Unwind the tap before rethrowing. Only one tap may exist per bus,
+            // and installing a second one raises an Objective-C exception that
+            // Swift cannot catch — so leaving this one behind would turn a
+            // recoverable start failure (session grabbed by a call, route
+            // change mid-start) into a crash the moment the user pressed Start
+            // again. `removeTap` on an untapped bus is a no-op.
+            input.removeTap(onBus: 0)
+            throw error
+        }
         isEngineRunning = true
     }
 
