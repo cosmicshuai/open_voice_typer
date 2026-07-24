@@ -74,6 +74,9 @@ final class VoicePanelModel {
     private var startAcknowledged = false
     private var recordingStartedAt: Date?
     private var timeoutTask: Task<Void, Never>?
+    /// The in-flight character-by-character insertion, so a dismissal can stop
+    /// it typing into a text field that is no longer ours.
+    private var insertionTask: Task<Void, Never>?
     private var lastInsertedText = ""
     private var tokens: [DarwinNotifier.ObservationToken] = []
     private var pollTimer: Timer?
@@ -195,6 +198,10 @@ final class VoicePanelModel {
         awaitingCommandID = nil
         timeoutTask?.cancel()
         timeoutTask = nil
+        // Stop mid-stream rather than typing the rest of a transcript into
+        // whatever field the next host app puts in front of us.
+        insertionTask?.cancel()
+        insertionTask = nil
         tokens = []
         pollTimer?.invalidate()
         pollTimer = nil
@@ -336,20 +343,33 @@ final class VoicePanelModel {
             phase = .idle
             return
         }
-        lastInsertedText = text
         let delayMS = min(6, 1500 / text.count)
         guard delayMS >= 1 else {
             insertTextHandler(text)
+            lastInsertedText = text
             phase = .idle
             return
         }
         phase = .processing
-        Task { @MainActor in
+        // `lastInsertedText` is what undo deletes, one deleteBackward per
+        // character, so it must record what actually *landed* — not what we
+        // set out to insert. Assigning the whole string up front meant an
+        // interrupted stream (the keyboard dismissed mid-insert) left undo
+        // believing it had inserted more than it had, and it would then eat
+        // that many characters of the user's own surrounding text.
+        lastInsertedText = ""
+        insertionTask?.cancel()
+        insertionTask = Task { @MainActor in
             for character in text {
+                guard !Task.isCancelled else { break }
                 insertTextHandler(String(character))
+                lastInsertedText.append(character)
                 try? await Task.sleep(for: .milliseconds(delayMS))
             }
-            phase = .idle
+            insertionTask = nil
+            // Don't stomp a phase set while this was streaming (a dismissal
+            // resets to .idle, the session may have dropped to .noSession).
+            if phase == .processing { phase = .idle }
         }
     }
 

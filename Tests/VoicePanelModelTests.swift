@@ -162,4 +162,105 @@ final class VoicePanelModelTests: XCTestCase {
         model.activate()
         XCTAssertFalse(model.canUndo, "undo must stay disabled until something is dictated")
     }
+
+    /// Undo issues one deleteBackward per character it believes it inserted,
+    /// so that count must match what actually landed in the field. It used to
+    /// be set to the whole transcript before streaming began, so an insertion
+    /// cut short left undo deleting into the user's own surrounding text.
+    func testUndoDeletesExactlyWhatWasInserted() async throws {
+        let model = makeModel()
+        var inserted = ""
+        var deletions = 0
+        model.insertTextHandler = { inserted += $0 }
+        model.deleteBackwardHandler = { deletions += 1 }
+        model.activate()
+
+        let text = try await dictate("Hello there", into: model)
+        XCTAssertEqual(inserted, text, "the whole transcript should have landed")
+
+        model.undoLastInsert()
+        XCTAssertEqual(
+            deletions, inserted.count,
+            "undo must delete exactly the characters it inserted, no more"
+        )
+        XCTAssertFalse(model.canUndo, "undo must not repeat")
+    }
+
+    /// Dismissing the keyboard mid-insert must stop the stream — otherwise the
+    /// rest of the transcript types itself into whatever field the next host
+    /// app puts in front of us — and undo must then account only for the part
+    /// that actually landed.
+    func testDismissalStopsInsertionAndUndoStaysAccurate() async throws {
+        let model = makeModel()
+        var inserted = ""
+        var deletions = 0
+        model.insertTextHandler = { inserted += $0 }
+        model.deleteBackwardHandler = { deletions += 1 }
+        model.activate()
+
+        // Cut the stream from inside the insert callback rather than racing it
+        // with a sleep: the handler runs synchronously on the MainActor inside
+        // the streaming loop, so dismissing on the Nth character interrupts at
+        // exactly the Nth every time, however loaded the machine is.
+        let cutAfter = 5
+        let text = String(repeating: "a", count: 400)
+        model.insertTextHandler = { [weak model] character in
+            inserted += character
+            if inserted.count == cutAfter { model?.deactivate() }
+        }
+
+        try await beginDictation(text, into: model)
+        let deadline = Date().addingTimeInterval(5)
+        while inserted.count < cutAfter, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let atDismissal = inserted.count
+        XCTAssertEqual(atDismissal, cutAfter, "the stream should have been cut mid-flight")
+        XCTAssertLessThan(atDismissal, text.count)
+
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertEqual(inserted.count, atDismissal, "insertion must stop when the keyboard goes away")
+
+        model.undoLastInsert()
+        XCTAssertEqual(deletions, atDismissal, "undo must only remove what actually landed")
+    }
+
+    // MARK: Helpers
+
+    /// Drives a dictation through the real bridge — start, then a published
+    /// result carrying the start command's id — and waits for the insertion.
+    @discardableResult
+    private func dictate(_ text: String, into model: VoicePanelModel) async throws -> String {
+        try await beginDictation(text, into: model)
+        let deadline = Date().addingTimeInterval(5)
+        while model.phase == .processing, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return text
+    }
+
+    private func beginDictation(_ text: String, into model: VoicePanelModel) async throws {
+        DictationBridge.clearCommands()
+        model.toggleDictation()
+        guard let start = DictationBridge.commandQueue().last else {
+            return XCTFail("no start command reached the bridge")
+        }
+        // Stopping sooner than `minRecordingSeconds` is discarded as a misclick,
+        // so dwell past it or the dictation never reaches the result stage.
+        try await Task.sleep(for: .seconds(VoicePanelModel.minRecordingSeconds + 0.15))
+        model.toggleDictation() // stop -> awaiting a result for `start.id`
+
+        DictationBridge.publish(DictationResult(
+            commandID: start.id,
+            styleID: Style.light.id,
+            rawText: text,
+            polishedText: text
+        ))
+        // Darwin delivery is in-process here but still asynchronous.
+        let deadline = Date().addingTimeInterval(3)
+        while DictationBridge.latestResult() != nil, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
 }
