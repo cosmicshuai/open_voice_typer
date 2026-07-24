@@ -22,15 +22,10 @@ struct VoicePanelView: View {
         // Keep controls reachable on iPad instead of stretching edge to edge.
         .frame(maxWidth: 600)
         .frame(maxWidth: .infinity)
-        // A quiet brand wash so the panel doesn't read as bare system gray.
-        .background {
-            LinearGradient(
-                colors: [Color.appAccent.opacity(0.10), Color.appAccent.opacity(0.02)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-        }
+        // No panel background: it must match the system keyboard gray exactly
+        // (set on the input view in KeyboardViewController) so iMessage's own
+        // container band above the keyboard blends in instead of contrasting
+        // against a lavender wash. The brand lives in the colored controls.
     }
 
     /// Elevated key-cap look shared by all tappable keys — white (or lifted
