@@ -238,7 +238,7 @@ private struct WaveformGlyph: View {
         HStack(alignment: .bottom, spacing: 5) {
             ForEach(heights.indices, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 3.5)
-                    .fill(LinearGradient.appAccentFill)
+                    .fill(LinearGradient.brandMark)
                     .frame(width: 7, height: heights[index])
                     .scaleEffect(y: animating ? 1 : 0.55, anchor: .bottom)
                     .animation(
