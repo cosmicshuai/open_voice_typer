@@ -1,21 +1,32 @@
 import SwiftUI
 
-/// The keyboard's dictation surface, laid out like Typeless: brand row on
-/// top (mark + Dictate/Translate toggle + context capsule), a monochrome
-/// "tap to speak" pill in the middle, and utility keys (globe / undo /
-/// space / delete / return) below. All colors are semantic so the panel
-/// adapts to the host app's light or dark keyboard appearance.
+/// The keyboard's dictation surface, laid out like Typeless: a header with the
+/// brand mark and context control on the left and the Dictate/Translate toggle
+/// on the right; then a centered stadium mic with a `return` pill beneath it,
+/// and the secondary keys in a column pinned to the trailing edge. All colors
+/// are semantic so the panel adapts to the host app's light or dark keyboard.
 struct VoicePanelView: View {
     @Bindable var model: VoicePanelModel
     @Namespace private var modeHighlight
 
+    // Typeless's proportions, measured off its keyboard at 393pt wide and kept
+    // fixed rather than proportional: these are thumb targets, so they should
+    // not grow with the screen the way a layout container would.
+    private let micSize = CGSize(width: 136, height: 62)
+    private let returnSize = CGSize(width: 112, height: 42)
+    private let utilityKeySide: CGFloat = 36
+
     var body: some View {
-        VStack(spacing: 10) {
-            brandRow
-            Spacer(minLength: 4)
-            speakArea
-            Spacer(minLength: 4)
-            controlRow
+        VStack(spacing: 8) {
+            headerRow
+            Spacer(minLength: 6)
+            actionCluster
+            // Typeless settles `return` near the panel's bottom edge rather
+            // than centering the cluster in the leftover space. Capping the
+            // trailing spacer sends the slack to the flexible one above, so a
+            // host that hands us a tall frame grows the gap under the header
+            // instead of stranding the keys in the middle.
+            Spacer(minLength: 0).frame(maxHeight: 4)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -38,24 +49,24 @@ struct VoicePanelView: View {
             .shadow(color: .black.opacity(0.22), radius: 0.5, y: 1)
     }
 
-    // MARK: Brand row
+    // MARK: Header
 
-    private var brandRow: some View {
-        // The mark and the trailing control have different widths, so equal
-        // spacers around the toggle would shove it off-center. Pin the mark
-        // and control to the edges and center the toggle in an overlay so it
-        // sits dead-center of the panel regardless of what flanks it.
+    /// Mark + context on the left, mode toggle hard right — Typeless's header
+    /// split. The toggle no longer needs the centering overlay it used to use,
+    /// because it's now pinned to an edge rather than floated in the middle.
+    private var headerRow: some View {
         HStack(spacing: 8) {
             Image(systemName: "waveform")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(LinearGradient.brandMark)
                 .accessibilityLabel("Voice Typer")
 
+            contextControl
+
             Spacer(minLength: 8)
 
-            trailingControl
+            modeToggle
         }
-        .overlay { modeToggle }
     }
 
     /// Dictate (waveform) | Translate (dictionary), with a gradient thumb
@@ -79,7 +90,7 @@ struct VoicePanelView: View {
         } label: {
             Image(systemName: systemImage)
                 .font(.footnote.weight(.semibold))
-                .frame(width: 46, height: 28)
+                .frame(width: 40, height: 28)
                 .background {
                     if isOn {
                         Capsule()
@@ -99,7 +110,7 @@ struct VoicePanelView: View {
     /// Dictate mode: the template picker. Translate mode: where the words
     /// will land (target language is configured in the app's Settings).
     @ViewBuilder
-    private var trailingControl: some View {
+    private var contextControl: some View {
         if model.mode == .translate {
             HStack(spacing: 4) {
                 Image(systemName: "arrow.right")
@@ -142,10 +153,27 @@ struct VoicePanelView: View {
         }
     }
 
-    // MARK: Speak area
+    // MARK: Action cluster
+
+    /// Typeless's arrangement: the primary control and `return` stacked down
+    /// the panel's centerline, with the secondary keys in a column pinned to
+    /// the trailing edge. Overlaying that column instead of giving it a row of
+    /// its own is what keeps the mic optically centered and lets the keys span
+    /// the mic and `return` rows the way Typeless's do.
+    private var actionCluster: some View {
+        ZStack(alignment: .trailing) {
+            VStack(spacing: 10) {
+                primaryArea
+                returnKey
+            }
+            .frame(maxWidth: .infinity)
+
+            utilityColumn
+        }
+    }
 
     @ViewBuilder
-    private var speakArea: some View {
+    private var primaryArea: some View {
         switch model.phase {
         case .noFullAccess:
             guidance(
@@ -170,7 +198,8 @@ struct VoicePanelView: View {
                         .multilineTextAlignment(.center)
                 }
                 .foregroundStyle(Color.appAccent)
-                .padding(.horizontal, 24)
+                // Clear the utility column so the copy never runs under it.
+                .padding(.horizontal, utilityKeySide + 16)
             }
         case .idle, .recording, .processing, .error:
             VStack(spacing: 10) {
@@ -179,49 +208,104 @@ struct VoicePanelView: View {
                     .foregroundStyle(model.phase.isError ? .red : .secondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, utilityKeySide + 16)
 
-                Button {
-                    model.toggleDictation()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                model.phase == .recording
-                                    ? LinearGradient.recordingFill
-                                    : LinearGradient.appAccentFill
-                            )
-                            .overlay(
-                                // Hairline top-lit rim so the button reads as a
-                                // glossy dome, not a flat disc (redesign recipe).
-                                Circle()
-                                    .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.8)
-                                    .blendMode(.plusLighter)
-                            )
-                            .frame(width: 76, height: 76)
-                            .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.12 : 1)
-                            .animation(.easeOut(duration: 0.12), value: model.audioLevel)
-                            .shadow(
-                                color: model.phase == .recording
-                                    ? Color.red.opacity(0.5)
-                                    : Color.appAccent.opacity(0.5),
-                                radius: 11, y: 8
-                            )
-                        if model.phase == .processing {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: model.phase == .recording ? "stop.fill" : "mic.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.white)
-                                .contentTransition(.symbolEffect(.replace))
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(model.phase == .processing)
-                .accessibilityLabel(model.phase == .recording ? "Stop and insert" : "Tap to speak")
+                micKey
             }
         }
+    }
+
+    /// The stadium mic — Typeless's shape. A wide capsule is a much larger
+    /// tap target than the circle it replaces at the same height, which is the
+    /// point: this is the one control the user hits every time.
+    private var micKey: some View {
+        Button {
+            model.toggleDictation()
+        } label: {
+            ZStack {
+                Capsule()
+                    .fill(
+                        model.phase == .recording
+                            ? LinearGradient.recordingFill
+                            : LinearGradient.appAccentFill
+                    )
+                    .overlay(
+                        // Hairline top-lit rim so the button reads as a glossy
+                        // dome, not a flat disc (redesign recipe).
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.8)
+                            .blendMode(.plusLighter)
+                    )
+                    .frame(width: micSize.width, height: micSize.height)
+                    .scaleEffect(model.phase == .recording ? 1 + CGFloat(model.audioLevel) * 0.08 : 1)
+                    .animation(.easeOut(duration: 0.12), value: model.audioLevel)
+                    .shadow(
+                        color: model.phase == .recording
+                            ? Color.red.opacity(0.5)
+                            : Color.appAccent.opacity(0.5),
+                        radius: 11, y: 8
+                    )
+                if model.phase == .processing {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: model.phase == .recording ? "stop.fill" : "mic.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.white)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(model.phase == .processing)
+        .accessibilityLabel(model.phase == .recording ? "Stop and insert" : "Tap to speak")
+    }
+
+    /// Inserts a newline — which is what "send" means in a chat host like
+    /// iMessage. Named `return` after the key it actually is, as Typeless does.
+    private var returnKey: some View {
+        Button {
+            model.insertText("\n")
+        } label: {
+            Text("return")
+                .font(.subheadline.weight(.medium))
+                .frame(width: returnSize.width, height: returnSize.height)
+                .background { keycap(cornerRadius: returnSize.height / 2) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Return")
+    }
+
+    /// Delete and undo, stacked at the trailing edge. Typeless puts an "@" in
+    /// the lower slot; undo is the better use of it here — the model already
+    /// tracks the last insertion, and after a long dictation lands wrong,
+    /// one tap beats holding delete.
+    private var utilityColumn: some View {
+        VStack(spacing: 10) {
+            utilityKey("delete.left", label: "Delete") {
+                model.deleteBackward()
+            }
+            utilityKey("arrow.uturn.backward", label: "Undo dictation") {
+                model.undoLastInsert()
+            }
+            .disabled(!model.canUndo)
+            .opacity(model.canUndo ? 1 : 0.4)
+        }
+    }
+
+    private func utilityKey(
+        _ systemImage: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.footnote)
+                .frame(width: utilityKeySide, height: utilityKeySide)
+                .background { keycap(cornerRadius: utilityKeySide / 2) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private func guidance(icon: String, title: String, message: String) -> some View {
@@ -235,39 +319,7 @@ struct VoicePanelView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 24)
-    }
-
-    // MARK: Controls
-
-    /// delete / send — send is accented as the common finish. Keyboard
-    /// switching uses the system globe row iOS draws below custom keyboards.
-    private var controlRow: some View {
-        HStack(spacing: 6) {
-            Button {
-                model.deleteBackward()
-            } label: {
-                Image(systemName: "delete.left")
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .background { keycap() }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Delete")
-            Button {
-                model.insertText("\n")
-            } label: {
-                Text("send")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .background(LinearGradient.appAccentFill, in: RoundedRectangle(cornerRadius: 9))
-                    .shadow(color: Color.appAccent.opacity(0.30), radius: 5, y: 2)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Send")
-        }
+        // Clear the utility column so the copy never runs under it.
+        .padding(.horizontal, utilityKeySide + 16)
     }
 }
