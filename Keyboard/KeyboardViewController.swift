@@ -13,16 +13,12 @@ final class KeyboardViewController: UIInputViewController {
         model.deleteBackwardHandler = { [weak self] in self?.textDocumentProxy.deleteBackward() }
         self.model = model
 
-        // Paint the input view itself with the panel's wash tone. Some hosts
-        // (iMessage) leave a band at the top of the keyboard that the SwiftUI
-        // content doesn't cover; if that band is inside our input view it
-        // shows this color instead of the host's gray. (safeAreaRegions = []
-        // makes the hosting content ignore host safe-area insets too.)
-        view.backgroundColor = UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.16, green: 0.16, blue: 0.20, alpha: 1)
-                : UIColor(red: 0.886, green: 0.894, blue: 0.949, alpha: 1)
-        }
+        // Match the system keyboard gray. iMessage reserves a container band
+        // above the keyboard that we can't paint; a lavender wash made that
+        // band stand out, so — like Typeless — the panel is the system gray
+        // and the brand lives in the colored controls. `systemGray4` tracks
+        // the keyboard background closely in both light and dark.
+        view.backgroundColor = .systemGray4
 
         let panel = UIHostingController(rootView: VoicePanelView(model: model).tint(Color.appAccent))
         panel.view.translatesAutoresizingMaskIntoConstraints = false
