@@ -193,7 +193,7 @@ private struct TemplateEditorView: View {
                             .padding(.leading, 10)
                             .overlay(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(Color.appAccent)
+                                    .fill(LinearGradient.brandMark)
                                     .frame(width: 3)
                             }
                     }

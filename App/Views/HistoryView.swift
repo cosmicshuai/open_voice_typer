@@ -104,6 +104,7 @@ struct HistoryView: View {
             in: Capsule()
         )
         .foregroundStyle(isOn ? .white : .primary)
+        .shadow(color: isOn ? Color.appAccent.opacity(0.3) : .clear, radius: 5, y: 2)
     }
 
     private func row(for record: TranscriptRecord) -> some View {
