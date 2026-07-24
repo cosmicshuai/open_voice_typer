@@ -128,7 +128,13 @@ struct SessionHeartbeat: Codable, Sendable {
     var startedAt: Date
     var lastBeatAt: Date
     /// The session is considered dead if the last beat is older than this.
-    static let staleAfter: TimeInterval = 5
+    /// The app beats every 2s, but a backgrounded app's timer can jitter and
+    /// App Group defaults propagate across processes with some lag — a tight
+    /// window made the keyboard falsely flip to "no session" (and stick on the
+    /// Open-app link) even while the app was alive. A generous window absorbs
+    /// that; a genuinely dead session is still caught fast by the keyboard's
+    /// 3s start-acknowledgement timeout when the user actually taps to speak.
+    static let staleAfter: TimeInterval = 12
 
     var isAlive: Bool {
         Date.now.timeIntervalSince(lastBeatAt) < Self.staleAfter
