@@ -47,7 +47,7 @@ struct VoicePanelView: View {
         HStack(spacing: 8) {
             Image(systemName: "waveform")
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(Color.appAccent)
+                .foregroundStyle(LinearGradient.brandMark)
                 .accessibilityLabel("Voice Typer")
 
             Spacer(minLength: 4)
@@ -193,10 +193,10 @@ struct VoicePanelView: View {
                                     : LinearGradient.appAccentFill
                             )
                             .overlay(
-                                // A hairline highlight so the button reads
-                                // dimensional instead of a flat disc.
+                                // Hairline top-lit rim so the button reads as a
+                                // glossy dome, not a flat disc (redesign recipe).
                                 Circle()
-                                    .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
+                                    .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.8)
                                     .blendMode(.plusLighter)
                             )
                             .frame(width: 76, height: 76)
@@ -204,9 +204,9 @@ struct VoicePanelView: View {
                             .animation(.easeOut(duration: 0.12), value: model.audioLevel)
                             .shadow(
                                 color: model.phase == .recording
-                                    ? Color.red.opacity(0.38)
-                                    : Color.appAccent.opacity(0.38),
-                                radius: 12, y: 5
+                                    ? Color.red.opacity(0.5)
+                                    : Color.appAccent.opacity(0.5),
+                                radius: 11, y: 8
                             )
                         if model.phase == .processing {
                             ProgressView()
