@@ -106,6 +106,33 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertGreaterThan(wav.count, 8_000, "engine stopped capturing after restarts")
     }
 
+    /// The escape hatch from a wedged engine. `recoverEngine()` reuses the tap
+    /// and converter bound to the format sampled at start, so once those go
+    /// stale it can never succeed again — and the session that depends on it
+    /// stayed dead through every foreground until the app was force-quit.
+    /// `restartEngine()` must drop both and come back recording, from either a
+    /// running or an already-stopped engine.
+    func testRestartEngineRebuildsAndKeepsRecording() async throws {
+        guard await AudioRecorder.requestPermission() else {
+            throw XCTSkip("microphone permission not granted")
+        }
+
+        let recorder = AudioRecorder()
+        try recorder.startEngine()
+        try recorder.restartEngine() // from running
+        XCTAssertTrue(recorder.isEngineHealthy)
+
+        recorder.stopEngine()
+        try recorder.restartEngine() // from stopped
+        XCTAssertTrue(recorder.isEngineHealthy)
+
+        recorder.beginCapture()
+        try await Task.sleep(for: .milliseconds(500))
+        let wav = recorder.endCapture()
+        recorder.stopEngine()
+        XCTAssertGreaterThan(wav.count, 8_000, "engine stopped capturing after a rebuild")
+    }
+
     /// startEngine() is idempotent — a second call while running must not try
     /// to install a second tap on the same bus.
     func testStartEngineIsIdempotent() async throws {

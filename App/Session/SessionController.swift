@@ -26,6 +26,9 @@ final class SessionController {
 
     private var heartbeatTimer: Timer?
     private var autoEndTimer: Timer?
+    /// Non-nil while `start()` is between the permission request and going
+    /// active; concurrent callers await it instead of starting a second time.
+    private var startInFlight: Task<Void, Never>?
     private var commandToken: DarwinNotifier.ObservationToken?
     private var interruptionObserver: (any NSObjectProtocol)?
     private var activeCommand: KeyboardCommand?
@@ -36,6 +39,11 @@ final class SessionController {
     /// Commands older than this are leftovers from a dead keyboard/app
     /// lifetime and must not fire a surprise recording.
     private static let commandMaxAge: TimeInterval = 20
+    /// When the engine has resisted every revival attempt for this long, the
+    /// session is declared dead rather than left hanging (see `beat`).
+    private static let unrecoverableAfter: TimeInterval = 30
+    /// When the current run of engine failures began; nil while healthy.
+    private var unhealthySince: Date?
 
     private init() {
         modelContainer = try! ModelContainer(for: TranscriptRecord.self)
@@ -50,28 +58,76 @@ final class SessionController {
     // MARK: Session lifecycle
 
     /// Starts a session without user interaction when possible. Called on
-    /// app foreground so opening the app is all the setup a dictation needs
-    /// (Typeless-style); never prompts for permission — the first manual
-    /// Start does that. Also repairs an already-active session whose engine
-    /// died while backgrounded (an interruption that couldn't be recovered
-    /// until the app came forward), so reopening the app always fixes things.
+    /// app launch and on every foreground, so opening the app is all the setup
+    /// a dictation needs (Typeless-style); never prompts for permission — the
+    /// first manual Start does that. Also repairs an already-active session
+    /// whose engine died while backgrounded (an interruption that couldn't be
+    /// recovered until the app came forward), so reopening the app always
+    /// fixes things.
     func autoStartIfPossible() async {
         guard AVAudioApplication.shared.recordPermission == .granted else { return }
         if isActive {
-            if !recorder.isEngineHealthy { try? recorder.recoverEngine() }
+            repairIfNeeded()
             return
         }
         await start()
     }
 
+    /// Foregrounding must always leave a working microphone behind. The
+    /// dangerous case is a session that is still `isActive` but whose engine is
+    /// dead: the keyboard sees no heartbeat and tells the user to open the app,
+    /// while `isActive` short-circuits `autoStartIfPossible()` — so opening the
+    /// app changed nothing, and the mic stayed dead until the app was
+    /// force-quit. Recovery alone isn't enough, because the failure that
+    /// survives backgrounding is exactly the one it can't fix (see
+    /// `AudioRecorder.restartEngine`).
+    private func repairIfNeeded() {
+        guard isActive, !recorder.isEngineHealthy else { return }
+        guard reviveEngine() else {
+            // Out of options, and the user is standing right here — no reason to
+            // sit on the watchdog's budget. Drop the session so `isActive` stops
+            // claiming a microphone we don't have (the app said "Voice keyboard
+            // ready" throughout this failure) and so the next foreground takes
+            // the clean `start()` path instead of landing here again.
+            lastError = AudioRecorderError.engineUnavailable.localizedDescription
+            stop()
+            return
+        }
+        lastError = nil
+        unhealthySince = nil
+        // Don't make the keyboard wait out the 2s timer to learn we're back.
+        beat()
+    }
+
     func start() async {
+        // `start()` suspends on the permission request, so two foreground
+        // triggers arriving together (launch and scene-active) could both clear
+        // the `isActive` guard and run the body twice — installing a second
+        // heartbeat timer and a second set of observers, with only the last of
+        // each retained and the rest leaked and firing forever.
+        if let startInFlight {
+            await startInFlight.value
+            return
+        }
         guard !isActive else { return }
+        let task = Task { @MainActor in await performStart() }
+        startInFlight = task
+        await task.value
+        startInFlight = nil
+    }
+
+    private func performStart() async {
         guard await AudioRecorder.requestPermission() else {
             lastError = AudioRecorderError.microphonePermissionDenied.localizedDescription
             return
         }
         do {
             try recorder.startEngine()
+            // startEngine() is a no-op when it believes the engine is already
+            // running, so a wedged engine left over from a previous session
+            // would otherwise be adopted as a live one — never publish a
+            // heartbeat for a microphone that isn't actually recording.
+            if !recorder.isEngineHealthy { try recorder.restartEngine() }
         } catch {
             lastError = error.localizedDescription
             return
@@ -92,7 +148,7 @@ final class SessionController {
             let ended = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
                 .flatMap(AVAudioSession.InterruptionType.init) == .ended
             Task { @MainActor in
-                if ended { try? SessionController.shared.recorder.recoverEngine() }
+                if ended { _ = SessionController.shared.reviveEngine() }
             }
         }
 
@@ -139,24 +195,50 @@ final class SessionController {
         isActive = false
         startedAt = nil
         activeCommand = nil
+        unhealthySince = nil
         DictationBridge.publish(nil as SessionHeartbeat?)
         DictationBridge.publish(PipelineState(phase: .idle))
     }
 
     /// The heartbeat doubles as an engine watchdog. If the engine was
     /// interrupted (a call, Siri, another audio app, the screen locking) it
-    /// tries to bring it back — but NEVER tears the session down for a
+    /// tries to bring it back — and does NOT tear the session down for a
     /// transient failure, or the user would have to reopen the app after every
     /// blip. While the engine is unhealthy it simply withholds the heartbeat,
     /// so the keyboard shows "open the app" for the outage and resumes on its
     /// own once recovery succeeds (or the app is foregrounded).
     private func beat() {
         guard startedAt != nil else { return }
-        if !recorder.isEngineHealthy {
-            try? recorder.recoverEngine()
-            guard recorder.isEngineHealthy else { return }
+        guard reviveEngine() else {
+            // Past the budget, this isn't an outage — it's a session that will
+            // never beat again. Left standing it is invisible to the user (the
+            // app claims the keyboard is ready) and unfixable without a force
+            // quit, so declare it dead: the keyboard's "open the app" prompt
+            // becomes true, and the next foreground takes the clean start path.
+            let since = unhealthySince ?? .now
+            unhealthySince = since
+            if Date.now.timeIntervalSince(since) >= Self.unrecoverableAfter {
+                lastError = AudioRecorderError.engineUnavailable.localizedDescription
+                stop()
+            }
+            return
         }
+        unhealthySince = nil
         DictationBridge.publish(SessionHeartbeat(startedAt: startedAt ?? .now, lastBeatAt: .now))
+    }
+
+    /// Brings the engine back if it died under us, escalating from a cheap kick
+    /// to a full rebuild. Returns whether the engine is healthy afterwards.
+    @discardableResult
+    private func reviveEngine() -> Bool {
+        if recorder.isEngineHealthy { return true }
+        try? recorder.recoverEngine()
+        if recorder.isEngineHealthy { return true }
+        // Recovery reuses a tap bound to the input format sampled at start, so
+        // an interruption that changed the route wedges it permanently — every
+        // later attempt throws the same error. Only a rebuild clears that.
+        try? recorder.restartEngine()
+        return recorder.isEngineHealthy
     }
 
     // MARK: Command handling
