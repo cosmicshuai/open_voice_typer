@@ -4,6 +4,22 @@ import UIKit
 final class KeyboardViewController: UIInputViewController {
     private var model: VoicePanelModel?
 
+    /// The keyboard background must be the system's *material*, not a color we
+    /// picked. Hosts draw furniture we can't paint — iMessage insets our input
+    /// view inside a rounded container band, and iOS draws the globe row below
+    /// it — both filled with the real keyboard backdrop. Every hand-matched
+    /// gray (the lavender wash, then `systemGray4`) landed a shade off, so the
+    /// panel read as a darker rectangle sandwiched between them.
+    ///
+    /// `UIInputView` with the `.keyboard` style *is* that backdrop: it renders
+    /// the same blur/vibrancy the system keyboard uses and tracks light/dark,
+    /// host appearance, and any future system restyle for free. It only works
+    /// if nothing paints over it, so `view.backgroundColor` stays nil and the
+    /// SwiftUI host is clear.
+    override func loadView() {
+        view = UIInputView(frame: .zero, inputViewStyle: .keyboard)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -13,13 +29,6 @@ final class KeyboardViewController: UIInputViewController {
         model.deleteBackwardHandler = { [weak self] in self?.textDocumentProxy.deleteBackward() }
         self.model = model
 
-        // Match the system keyboard gray. iMessage reserves a container band
-        // above the keyboard that we can't paint; a lavender wash made that
-        // band stand out, so — like Typeless — the panel is the system gray
-        // and the brand lives in the colored controls. `systemGray4` tracks
-        // the keyboard background closely in both light and dark.
-        view.backgroundColor = .systemGray4
-
         let panel = UIHostingController(rootView: VoicePanelView(model: model).tint(Color.appAccent))
         panel.view.translatesAutoresizingMaskIntoConstraints = false
         panel.view.backgroundColor = .clear
@@ -28,13 +37,14 @@ final class KeyboardViewController: UIInputViewController {
         view.addSubview(panel.view)
         panel.didMove(toParent: self)
 
-        // The keyboard's height is set on the INPUT VIEW itself; the panel
-        // just fills it. It matches the standard iPhone keyboard height:
-        // hosts like iMessage reserve a fixed keyboard frame and bottom-align
-        // a shorter input view inside it, leaving a gray band on top — so the
-        // input view must be tall enough to fill that frame. Priority 999
-        // keeps it from fighting the system's transient constraints.
-        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 240)
+        // A floor, not a fixed height. `UIInputView` is sized by the system to
+        // the host's reserved keyboard frame unless `allowsSelfSizing` is set,
+        // which is why pinning this to 291 once changed nothing — so let the
+        // host drive the height and fill whatever it gives us. This only stops
+        // hosts that offer an unusually short frame from crushing the panel
+        // below its content (mic + status + control row ≈ 244pt). Priority 999
+        // yields to the system's own height rather than logging a conflict.
+        let heightConstraint = view.heightAnchor.constraint(greaterThanOrEqualToConstant: 240)
         heightConstraint.priority = UILayoutPriority(999)
 
         NSLayoutConstraint.activate([
